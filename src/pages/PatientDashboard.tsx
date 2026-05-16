@@ -65,13 +65,13 @@ export default function PatientDashboard() {
           </div>
 
           <nav className="flex flex-col gap-2 px-4">
-            <button className="flex items-center gap-3 px-4 py-3 bg-teal-700/50 text-white rounded-xl font-medium transition-colors">
+            <button onClick={() => navigate("/patient/dashboard")} className="flex items-center gap-3 px-4 py-3 bg-teal-700/50 text-white rounded-xl font-medium transition-colors">
               <LayoutDashboard className="w-5 h-5" /> Dashboard
             </button>
-            <button className="flex items-center gap-3 px-4 py-3 hover:bg-teal-700/30 rounded-xl transition-colors">
+            <button onClick={() => navigate("/patient/session")} className="flex items-center gap-3 px-4 py-3 hover:bg-teal-700/30 rounded-xl transition-colors">
               <Video className="w-5 h-5" /> My Sessions
             </button>
-            <button className="flex items-center gap-3 px-4 py-3 hover:bg-teal-700/30 rounded-xl transition-colors">
+            <button onClick={() => navigate("/patient/match")} className="flex items-center gap-3 px-4 py-3 hover:bg-teal-700/30 rounded-xl transition-colors">
               <UserIcon className="w-5 h-5" /> My Therapist
             </button>
             <button className="flex items-center gap-3 px-4 py-3 hover:bg-teal-700/30 rounded-xl transition-colors">
@@ -144,7 +144,7 @@ export default function PatientDashboard() {
                         <p className="flex items-center gap-2"><Clock className="w-4 h-4" /> 3:00 PM (45 min)</p>
                       </div>
                     </div>
-                    <button className="w-full py-2.5 bg-[var(--primary)] text-white font-medium rounded-xl hover:bg-teal-700 transition-colors">
+                    <button onClick={() => navigate("/patient/session")} className="w-full py-2.5 bg-[var(--primary)] text-white font-medium rounded-xl hover:bg-teal-700 transition-colors">
                       Join Session
                     </button>
                   </div>

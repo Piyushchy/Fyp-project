@@ -9,6 +9,7 @@ import IntakeFormPage from "./pages/IntakeFormPage";
 import TherapistMatchPage from "./pages/TherapistMatchPage";
 import PatientDashboard from "./pages/PatientDashboard";
 import TherapistDashboard from "./pages/TherapistDashboard";
+import PatientAnalyticsPage from "./pages/PatientAnalyticsPage";
 import SessionPage from "./pages/SessionPage";
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
           
           {/* Therapist Routes */}
           <Route path="/therapist/dashboard" element={<TherapistDashboard />} />
+          <Route path="/therapist/patient/:id" element={<PatientAnalyticsPage />} />
           <Route path="/therapist/session" element={<SessionPage />} />
           
           {/* Fallback */}
