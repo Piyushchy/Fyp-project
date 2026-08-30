@@ -4,9 +4,9 @@ Real-time facial emotion detection using a fine-tuned Vision Transformer (ViT V2
 
 The system detects ONE FACE AT A TIME from a webcam and classifies the facial expression into one of seven emotions.
 
-============================================================
+ 
 EMOTIONS
-============================================================
+ 
 
 0 → Angry
 1 → Disgust
@@ -17,9 +17,9 @@ EMOTIONS
 6 → Surprise
 
 
-============================================================
+ 
 PROJECT STRUCTURE
-============================================================
+ 
 
 vit-emotion-v2-deployment/
 │
@@ -30,9 +30,9 @@ vit-emotion-v2-deployment/
 └── README.md
 
 
-============================================================
+ 
 IMPORTANT
-============================================================
+ 
 
 The following two files are part of the same ONNX model and
 MUST remain together in the same folder:
@@ -43,9 +43,9 @@ vit-emotion-v2.onnx.data
 Do NOT rename, delete, or separate the .onnx.data file.
 
 
-============================================================
+ 
 REQUIREMENTS
-============================================================
+ 
 
 • Python 3.10 or 3.11 recommended
 • Webcam
@@ -56,9 +56,9 @@ REQUIREMENTS
 The deployment uses ONNX Runtime for inference.
 
 
-============================================================
+ 
 SETUP
-============================================================
+ 
 
 1. CLONE THE REPOSITORY
 ------------------------------------------------------------
@@ -101,9 +101,9 @@ Expected output:
 Setup successful
 
 
-============================================================
+ 
 RUN THE APPLICATION
-============================================================
+ 
 
 Make sure the virtual environment is activated.
 
@@ -126,9 +126,9 @@ The application will:
 Press Q to close the application.
 
 
-============================================================
+ 
 PROCESSING PIPELINE
-============================================================
+ 
 
 Webcam
    ↓
@@ -151,9 +151,9 @@ Emotion Prediction
 Emotion + Confidence
 
 
-============================================================
+ 
 MODEL INFORMATION
-============================================================
+ 
 
 INPUT
 ------------------------------------------------------------
@@ -199,9 +199,9 @@ CLASS MAPPING
 6 → surprise
 
 
-============================================================
+ 
 IMAGE PREPROCESSING
-============================================================
+ 
 
 The detected face is processed before being passed to the
 ViT V2 ONNX model.
@@ -219,9 +219,9 @@ Processing steps:
 9. Pass tensor to ONNX model
 
 
-============================================================
+ 
 FACE DETECTION
-============================================================
+ 
 
 The current implementation uses OpenCV's Haar Cascade
 face detector.
@@ -234,9 +234,9 @@ facial expression.
 Only ONE FACE is processed at a time.
 
 
-============================================================
+ 
 REAL-TIME PROCESSING
-============================================================
+ 
 
 The application can skip frames to improve real-time
 performance.
@@ -268,9 +268,9 @@ A higher value can improve performance on slower systems,
 but the displayed emotion will update less frequently.
 
 
-============================================================
+ 
 CONFIDENCE SCORE
-============================================================
+ 
 
 The application displays the probability of the predicted
 emotion.
@@ -288,9 +288,9 @@ guarantee that a person is experiencing that emotion.
 The system estimates emotion from visible facial features.
 
 
-============================================================
+ 
 MODEL PERFORMANCE
-============================================================
+ 
 
 Current ViT V2 evaluation results:
 
@@ -326,9 +326,9 @@ Performance is comparatively lower for:
 • Angry
 
 
-============================================================
+ 
 WHY ONNX?
-============================================================
+ 
 
 The original model was trained using a Vision Transformer.
 
@@ -356,9 +356,9 @@ This makes deployment lightweight and suitable for
 CPU-based inference.
 
 
-============================================================
+ 
 WHY CPU INSTEAD OF NVIDIA GPU?
-============================================================
+ 
 
 The deployment is designed to work on systems without a
 dedicated NVIDIA GPU.
@@ -373,9 +373,9 @@ A compatible GPU execution provider can be considered in
 the future if additional performance is required.
 
 
-============================================================
+ 
 TROUBLESHOOTING
-============================================================
+ 
 
 PROBLEM: ONNX Runtime is missing
 ------------------------------------------------------------
@@ -470,9 +470,9 @@ vit-emotion-v2.onnx.data
 They must be located in the same directory.
 
 
-============================================================
+ 
 INACCURATE PREDICTIONS
-============================================================
+ 
 
 Incorrect predictions can occur because of:
 
@@ -500,9 +500,9 @@ The model should be evaluated using test-set metrics rather
 than relying only on individual webcam predictions.
 
 
-============================================================
+ 
 TRAINING VS DEPLOYMENT
-============================================================
+ 
 
 TRAINING
 ------------------------------------------------------------
@@ -547,9 +547,9 @@ The original training dataset is NOT required to run this
 deployment project.
 
 
-============================================================
+ 
 MULTIMODAL PROJECT INTEGRATION
-============================================================
+ 
 
 This ViT V2 model is the VISUAL EMOTION DETECTION component
 of the larger multimodal emotion recognition system.
@@ -583,9 +583,9 @@ The ViT V2 ONNX model therefore acts as the:
 VISUAL EMOTION DETECTION MODULE
 
 
-============================================================
+ 
 DEVELOPMENT WORKFLOW
-============================================================
+ 
 
 For a new developer:
 
@@ -601,9 +601,9 @@ For a new developer:
 10. Test again before committing changes.
 
 
-============================================================
+ 
 GIT WORKFLOW
-============================================================
+ 
 
 After making changes:
 
@@ -622,9 +622,9 @@ Push the changes:
 git push origin main
 
 
-============================================================
+ 
 IMPORTANT FOR CONTRIBUTORS
-============================================================
+ 
 
 Do NOT upload:
 
@@ -640,9 +640,9 @@ The deployment folder should contain only the files required
 to run the ONNX inference application.
 
 
-============================================================
+ 
 CURRENT DEPLOYMENT FILES
-============================================================
+ 
 
 emotion_config.json
     → Emotion labels/configuration
@@ -658,8 +658,3 @@ vit-emotion-v2.onnx.data
 
 README.md
     → Project documentation
-
-
-============================================================
-END
-============================================================
