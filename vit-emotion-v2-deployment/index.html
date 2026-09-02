@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Real-time facial emotion recognition dashboard powered by a Vision Transformer model." />
+  <title>EmotionVision — Real-Time Emotion Recognition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ============================================================
+       DESIGN TOKENS
+       ============================================================ */
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-card: rgba(255, 255, 255, 0.04);
+      --bg-card-hover: rgba(255, 255, 255, 0.07);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-glow: rgba(255, 255, 255, 0.12);
+
+      --text-primary: #f0f0f5;
+      --text-secondary: #8b8b9e;
+      --text-muted: #55556a;
+
+      --accent-blue: #6c8aff;
+      --accent-purple: #a78bfa;
+      --accent-cyan: #22d3ee;
+      --accent-green: #34d399;
+      --accent-red: #f87171;
+      --accent-amber: #fbbf24;
+      --accent-pink: #f472b6;
+
+      --glass-bg: rgba(18, 18, 26, 0.65);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --glass-blur: 24px;
+
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-xl: 28px;
+
+      --shadow-glow: 0 0 60px rgba(108, 138, 255, 0.08);
+      --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+      --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-spring: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* ============================================================
+       RESET & BASE
+       ============================================================ */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Ambient background glow */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(108, 138, 255, 0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 90%, rgba(167, 139, 250, 0.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ============================================================
+       LAYOUT
+       ============================================================ */
+    .app-wrapper {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* --- Header --- */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border-subtle);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      background: var(--glass-bg);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-brand .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      border-radius: var(--radius-sm);
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      box-shadow: 0 0 20px rgba(108, 138, 255, 0.3);
+    }
+
+    .header-brand h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--text-primary), var(--accent-blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-brand .subtitle {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* --- Main content --- */
+    .main-content {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 24px;
+      padding: 24px 32px;
+      flex: 1;
+    }
+
+    @media (max-width: 1024px) {
+      .main-content {
+        grid-template-columns: 1fr;
+        padding: 16px;
+      }
+    }
+
+    /* ============================================================
+       GLASS CARD COMPONENT
+       ============================================================ */
+    .glass-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+      transition: border-color var(--transition-smooth);
+    }
+
+    .glass-card:hover {
+      border-color: var(--border-glow);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .card-header h2 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+    }
+
+    .card-body {
+      padding: 22px;
+    }
+
+    /* ============================================================
+       VIDEO VIEWPORT
+       ============================================================ */
+    .video-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .video-viewport {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-glow);
+    }
+
+    .video-viewport video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: scaleX(-1);     /* mirror */
+    }
+
+    .video-viewport .overlay-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      transform: scaleX(-1);     /* mirror to match */
+    }
+
+    /* Status badge floated on video */
+    .video-status-badge {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      transition: all var(--transition-smooth);
+      z-index: 10;
+    }
+
+    .video-status-badge.no-face {
+      background: rgba(248, 113, 113, 0.15);
+      color: var(--accent-red);
+      border-color: rgba(248, 113, 113, 0.2);
+    }
+
+    .video-status-badge.face-detected {
+      background: rgba(52, 211, 153, 0.15);
+      color: var(--accent-green);
+      border-color: rgba(52, 211, 153, 0.2);
+    }
+
+    .video-status-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* FPS badge on video */
+    .video-fps-badge {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      padding: 6px 14px;
+      border-radius: 100px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 500;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--glass-border);
+      color: var(--accent-cyan);
+      z-index: 10;
+    }
+
+    /* Emotion label on video */
+    .video-emotion-label {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(0);
+      padding: 10px 28px;
+      border-radius: 100px;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid var(--glass-border);
+      color: var(--text-primary);
+      z-index: 10;
+      transition: all var(--transition-spring);
+      white-space: nowrap;
+    }
+
+    .video-emotion-label .emoji {
+      margin-right: 8px;
+    }
+
+    /* Placeholder state */
+    .video-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--text-muted);
+      z-index: 5;
+    }
+
+    .video-placeholder .placeholder-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px dashed var(--border-subtle);
+      display: grid;
+      place-items: center;
+      font-size: 28px;
+    }
+
+    .video-placeholder p {
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .video-placeholder.hidden { display: none; }
+
+    /* ============================================================
+       BUTTONS
+       ============================================================ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border-radius: 100px;
+      font-family: var(--font-sans);
+      font-size: 0.8rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: all var(--transition-smooth);
+      letter-spacing: 0.01em;
+      outline: none;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(108, 138, 255, 0.25);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 6px 28px rgba(108, 138, 255, 0.4);
+      transform: translateY(-1px);
+    }
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-danger {
+      background: rgba(248, 113, 113, 0.15);
+      color: var(--accent-red);
+      border: 1px solid rgba(248, 113, 113, 0.2);
+    }
+    .btn-danger:hover {
+      background: rgba(248, 113, 113, 0.25);
+    }
+
+    /* ============================================================
+       STATS PANEL (right sidebar)
+       ============================================================ */
+    .stats-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* --- Connection status --- */
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      border-radius: var(--radius-md);
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all var(--transition-smooth);
+    }
+
+    .connection-status.connected {
+      background: rgba(52, 211, 153, 0.08);
+      border: 1px solid rgba(52, 211, 153, 0.15);
+      color: var(--accent-green);
+    }
+
+    .connection-status.disconnected {
+      background: rgba(248, 113, 113, 0.08);
+      border: 1px solid rgba(248, 113, 113, 0.15);
+      color: var(--accent-red);
+    }
+
+    .connection-status.reconnecting {
+      background: rgba(251, 191, 36, 0.08);
+      border: 1px solid rgba(251, 191, 36, 0.15);
+      color: var(--accent-amber);
+    }
+
+    .connection-status .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    .connection-status.connected .status-dot {
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    .connection-status.reconnecting .status-dot {
+      animation: pulse-dot 0.8s ease-in-out infinite;
+    }
+
+    /* --- Stat item --- */
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .stat-item .stat-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    .stat-item .stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+
+    .stat-item .stat-unit {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* --- Stat grid (2-col) --- */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* --- Emotion badge --- */
+    .emotion-display {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+    }
+
+    .emotion-emoji {
+      font-size: 3rem;
+      line-height: 1;
+      transition: transform var(--transition-spring);
+    }
+
+    .emotion-emoji.pop {
+      transform: scale(1.15);
+    }
+
+    .emotion-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-transform: capitalize;
+      letter-spacing: 0.02em;
+    }
+
+    /* --- Confidence bar --- */
+    .confidence-bar-wrapper {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .confidence-bar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .confidence-bar-header .label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+
+    .confidence-bar-header .value {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .confidence-bar-track {
+      width: 100%;
+      height: 8px;
+      background: var(--bg-secondary);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+
+    .confidence-bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+      transition: width var(--transition-smooth);
+      min-width: 0;
+    }
+
+    /* --- Emotion history sparkline --- */
+    .emotion-history {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .emotion-history-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .emotion-history-bar .eh-label {
+      width: 70px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: capitalize;
+      color: var(--text-secondary);
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .emotion-history-bar .eh-track {
+      flex: 1;
+      height: 6px;
+      background: var(--bg-secondary);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+
+    .emotion-history-bar .eh-fill {
+      height: 100%;
+      border-radius: 100px;
+      transition: width var(--transition-smooth);
+      min-width: 0;
+    }
+
+    .emotion-history-bar .eh-value {
+      width: 42px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* Emotion-specific colours */
+    .emo-angry    { --emo-color: #f87171; }
+    .emo-disgust  { --emo-color: #a78bfa; }
+    .emo-fear     { --emo-color: #c084fc; }
+    .emo-happy    { --emo-color: #fbbf24; }
+    .emo-neutral  { --emo-color: #94a3b8; }
+    .emo-sad      { --emo-color: #60a5fa; }
+    .emo-surprise { --emo-color: #34d399; }
+
+    .emotion-history-bar .eh-fill { background: var(--emo-color); }
+
+    /* ============================================================
+       HIDDEN CANVAS (offscreen capture)
+       ============================================================ */
+    #captureCanvas { display: none; }
+
+    /* ============================================================
+       SCROLLBAR
+       ============================================================ */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-subtle);
+      border-radius: 100px;
+    }
+
+    /* ============================================================
+       ANIMATIONS
+       ============================================================ */
+    @keyframes fade-in-up {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-in {
+      animation: fade-in-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+    }
+
+    .delay-1 { animation-delay: 0.05s; }
+    .delay-2 { animation-delay: 0.10s; }
+    .delay-3 { animation-delay: 0.15s; }
+    .delay-4 { animation-delay: 0.20s; }
+    .delay-5 { animation-delay: 0.25s; }
+  </style>
+</head>
+
+<body>
+  <div class="app-wrapper">
+    <!-- ====== HEADER ====== -->
+    <header class="header">
+      <div class="header-brand">
+        <div class="logo-icon">🧠</div>
+        <div>
+          <h1>EmotionVision</h1>
+          <span class="subtitle">Real-Time ViT Inference</span>
+        </div>
+      </div>
+      <div class="header-controls">
+        <button class="btn btn-danger" id="btnStop" disabled>
+          ⏹ Stop
+        </button>
+        <button class="btn btn-primary" id="btnStart">
+          ▶ Start Session
+        </button>
+      </div>
+    </header>
+
+    <!-- ====== MAIN ====== -->
+    <main class="main-content">
+      <!-- --- Video Column --- -->
+      <section class="video-section animate-in delay-1">
+        <div class="video-viewport" id="videoViewport">
+          <!-- Placeholder shown before webcam starts -->
+          <div class="video-placeholder" id="videoPlaceholder">
+            <div class="placeholder-icon">📷</div>
+            <p>Click <strong>Start Session</strong> to begin</p>
+          </div>
+
+          <video id="webcamVideo" autoplay playsinline muted></video>
+          <canvas class="overlay-canvas" id="overlayCanvas"></canvas>
+
+          <div class="video-status-badge no-face" id="faceBadge">
+            <span class="dot"></span>
+            <span id="faceBadgeText">Waiting…</span>
+          </div>
+
+          <div class="video-fps-badge" id="fpsBadge">— FPS</div>
+
+          <div class="video-emotion-label" id="emotionLabel" style="display:none;">
+            <span class="emoji" id="emotionEmoji"></span>
+            <span id="emotionLabelText"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- --- Stats Sidebar --- -->
+      <aside class="stats-panel">
+        <!-- Connection -->
+        <div class="glass-card animate-in delay-2">
+          <div class="card-header">
+            <h2>Connection</h2>
+          </div>
+          <div class="card-body">
+            <div class="connection-status disconnected" id="connStatus">
+              <span class="status-dot"></span>
+              <span id="connStatusText">Disconnected</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Stats -->
+        <div class="glass-card animate-in delay-3">
+          <div class="card-header">
+            <h2>Live Stats</h2>
+          </div>
+          <div class="card-body">
+            <div class="stat-grid">
+              <div class="stat-item">
+                <span class="stat-label">Backend FPS</span>
+                <span class="stat-value" id="statFps">—</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">MP Confidence</span>
+                <span class="stat-value" id="statMpConf">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Primary Emotion -->
+        <div class="glass-card animate-in delay-4">
+          <div class="card-header">
+            <h2>Primary Emotion</h2>
+          </div>
+          <div class="card-body">
+            <div class="emotion-display">
+              <div class="emotion-emoji" id="statEmoji">🔍</div>
+              <div class="emotion-name" id="statEmotionName">Detecting…</div>
+            </div>
+
+            <div class="confidence-bar-wrapper" style="margin-top: 12px;">
+              <div class="confidence-bar-header">
+                <span class="label">ViT Confidence</span>
+                <span class="value" id="statConfValue">0%</span>
+              </div>
+              <div class="confidence-bar-track">
+                <div class="confidence-bar-fill" id="statConfBar" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Emotion Distribution -->
+        <div class="glass-card animate-in delay-5">
+          <div class="card-header">
+            <h2>Distribution</h2>
+          </div>
+          <div class="card-body emotion-history" id="emotionDistribution">
+            <!-- built by JS -->
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Offscreen capture canvas -->
+  <canvas id="captureCanvas"></canvas>
+
+  <script>
+    /* ==========================================================
+       CONSTANTS & STATE
+       ========================================================== */
+    const WS_URL = 'ws://localhost:8000/ws/video';
+    const JPEG_QUALITY = 0.7;
+    const RECONNECT_DELAY_MS = 2000;
+    const MAX_RECONNECT_ATTEMPTS = 20;
+
+    const EMOTION_EMOJIS = {
+      angry:    '😠',
+      disgust:  '🤢',
+      fear:     '😨',
+      happy:    '😊',
+      neutral:  '😐',
+      sad:      '😢',
+      surprise: '😲',
+    };
+
+    const EMOTION_COLORS = {
+      angry:    '#f87171',
+      disgust:  '#a78bfa',
+      fear:     '#c084fc',
+      happy:    '#fbbf24',
+      neutral:  '#94a3b8',
+      sad:      '#60a5fa',
+      surprise: '#34d399',
+    };
+
+    const EMOTION_KEYS = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'];
+
+    /** Running distribution accumulator (exponential moving average). */
+    const distribution = {};
+    EMOTION_KEYS.forEach(k => distribution[k] = 0);
+
+    let ws = null;
+    let videoStream = null;
+    let running = false;
+    let reconnectAttempts = 0;
+    let awaitingResponse = false;   // frame-pacing flag
+    let animFrameId = null;
+    let prevEmotion = null;
+
+    /* ==========================================================
+       DOM REFS
+       ========================================================== */
+    const $video        = document.getElementById('webcamVideo');
+    const $overlay      = document.getElementById('overlayCanvas');
+    const $capture      = document.getElementById('captureCanvas');
+    const $placeholder  = document.getElementById('videoPlaceholder');
+    const $btnStart     = document.getElementById('btnStart');
+    const $btnStop      = document.getElementById('btnStop');
+    const $faceBadge    = document.getElementById('faceBadge');
+    const $faceBadgeT   = document.getElementById('faceBadgeText');
+    const $fpsBadge     = document.getElementById('fpsBadge');
+    const $emotionLabel = document.getElementById('emotionLabel');
+    const $emotionEmoji = document.getElementById('emotionEmoji');
+    const $emotionLabelT= document.getElementById('emotionLabelText');
+    const $connStatus   = document.getElementById('connStatus');
+    const $connStatusT  = document.getElementById('connStatusText');
+    const $statFps      = document.getElementById('statFps');
+    const $statMpConf   = document.getElementById('statMpConf');
+    const $statEmoji    = document.getElementById('statEmoji');
+    const $statEmoName  = document.getElementById('statEmotionName');
+    const $statConfVal  = document.getElementById('statConfValue');
+    const $statConfBar  = document.getElementById('statConfBar');
+    const $distPanel    = document.getElementById('emotionDistribution');
+
+    /* ==========================================================
+       BUILD DISTRIBUTION BARS
+       ========================================================== */
+    function buildDistributionPanel() {
+      $distPanel.innerHTML = '';
+      EMOTION_KEYS.forEach(emo => {
+        const row = document.createElement('div');
+        row.className = `emotion-history-bar emo-${emo}`;
+        row.innerHTML = `
+          <span class="eh-label">${emo}</span>
+          <div class="eh-track"><div class="eh-fill" id="dist-${emo}" style="width:0%"></div></div>
+          <span class="eh-value" id="distv-${emo}">0%</span>`;
+        $distPanel.appendChild(row);
+      });
+    }
+    buildDistributionPanel();
+
+    /* ==========================================================
+       UI HELPERS
+       ========================================================== */
+    function setConnectionStatus(state) {
+      $connStatus.className = 'connection-status ' + state;
+      const labels = { connected: 'Connected', disconnected: 'Disconnected', reconnecting: 'Reconnecting…' };
+      $connStatusT.textContent = labels[state] || state;
+    }
+
+    function setFaceBadge(detected) {
+      if (detected) {
+        $faceBadge.className = 'video-status-badge face-detected';
+        $faceBadgeT.textContent = 'Face Detected';
+      } else {
+        $faceBadge.className = 'video-status-badge no-face';
+        $faceBadgeT.textContent = 'No Face Detected';
+      }
+    }
+
+    /* ==========================================================
+       OVERLAY DRAWING
+       ========================================================== */
+    const ctx = $overlay.getContext('2d');
+
+    function clearOverlay() {
+      ctx.clearRect(0, 0, $overlay.width, $overlay.height);
+    }
+
+    /**
+     * Draw the bounding box + label scaled to overlay dimensions.
+     * The bbox coords are relative to the original video resolution.
+     */
+    function drawBBox(bbox, label, confidence, color) {
+      if (!$video.videoWidth || !$video.videoHeight) return;
+
+      // Match canvas internal resolution to display size.
+      const dw = $overlay.clientWidth;
+      const dh = $overlay.clientHeight;
+      if ($overlay.width !== dw || $overlay.height !== dh) {
+        $overlay.width = dw;
+        $overlay.height = dh;
+      }
+
+      const scaleX = dw / $video.videoWidth;
+      const scaleY = dh / $video.videoHeight;
+
+      const x = bbox.x * scaleX;
+      const y = bbox.y * scaleY;
+      const w = bbox.w * scaleX;
+      const h = bbox.h * scaleY;
+
+      clearOverlay();
+
+      // Rounded-rect bbox
+      const r = 8;
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.arcTo(x + w, y, x + w, y + r, r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+      ctx.lineTo(x + r, y + h);
+      ctx.arcTo(x, y + h, x, y + h - r, r);
+      ctx.lineTo(x, y + r);
+      ctx.arcTo(x, y, x + r, y, r);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Corner accents (thicker, shorter strokes at each corner)
+      const accentLen = Math.min(w, h) * 0.18;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = color;
+      // Top-left
+      ctx.beginPath(); ctx.moveTo(x, y + accentLen); ctx.lineTo(x, y); ctx.lineTo(x + accentLen, y); ctx.stroke();
+      // Top-right
+      ctx.beginPath(); ctx.moveTo(x + w - accentLen, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + accentLen); ctx.stroke();
+      // Bottom-left
+      ctx.beginPath(); ctx.moveTo(x, y + h - accentLen); ctx.lineTo(x, y + h); ctx.lineTo(x + accentLen, y + h); ctx.stroke();
+      // Bottom-right
+      ctx.beginPath(); ctx.moveTo(x + w - accentLen, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - accentLen); ctx.stroke();
+
+      // Label pill above box
+      const text = `${label}  ${(confidence * 100).toFixed(1)}%`;
+      ctx.font = '600 14px Inter, sans-serif';
+      const tm = ctx.measureText(text);
+      const pillW = tm.width + 20;
+      const pillH = 26;
+      const pillX = x + (w - pillW) / 2;
+      const pillY = y - pillH - 8;
+
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.roundRect(pillX, pillY, pillW, pillH, 6);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      ctx.fillStyle = '#000';
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, pillX + pillW / 2, pillY + pillH / 2);
+    }
+
+    /* ==========================================================
+       WEBCAM
+       ========================================================== */
+    async function startWebcam() {
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        });
+        $video.srcObject = videoStream;
+        $placeholder.classList.add('hidden');
+        await $video.play();
+      } catch (err) {
+        console.error('Webcam error:', err);
+        alert('Could not access webcam. Please grant camera permission and reload.');
+      }
+    }
+
+    function stopWebcam() {
+      if (videoStream) {
+        videoStream.getTracks().forEach(t => t.stop());
+        videoStream = null;
+      }
+      $video.srcObject = null;
+      $placeholder.classList.remove('hidden');
+    }
+
+    /* ==========================================================
+       WEBSOCKET
+       ========================================================== */
+    function connectWebSocket() {
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+      setConnectionStatus('reconnecting');
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        reconnectAttempts = 0;
+        setConnectionStatus('connected');
+        awaitingResponse = false;
+        sendNextFrame();            // kick off the pipeline
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const data = JSON.parse(evt.data);
+          handlePrediction(data);
+        } catch (e) {
+          console.warn('Bad WS message', e);
+        }
+        // Frame-ack: now safe to send the next frame.
+        awaitingResponse = false;
+        if (running) sendNextFrame();
+      };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error', err);
+      };
+
+      ws.onclose = () => {
+        setConnectionStatus('disconnected');
+        if (running && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts++;
+          setConnectionStatus('reconnecting');
+          setTimeout(connectWebSocket, RECONNECT_DELAY_MS);
+        }
+      };
+    }
+
+    /* ==========================================================
+       FRAME CAPTURE & SEND  (frame-paced)
+       ========================================================== */
+    function sendNextFrame() {
+      if (!running || awaitingResponse) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!$video.videoWidth) {
+        // Video not ready yet — retry on next paint.
+        requestAnimationFrame(sendNextFrame);
+        return;
+      }
+
+      // Capture to offscreen canvas.
+      $capture.width = $video.videoWidth;
+      $capture.height = $video.videoHeight;
+      const cctx = $capture.getContext('2d');
+      cctx.drawImage($video, 0, 0);
+
+      const dataUrl = $capture.toDataURL('image/jpeg', JPEG_QUALITY);
+      // Strip the "data:image/jpeg;base64," prefix — backend handles both formats.
+      const b64 = dataUrl.split(',')[1];
+
+      awaitingResponse = true;
+      ws.send(b64);
+    }
+
+    /* ==========================================================
+       HANDLE SERVER PREDICTION
+       ========================================================== */
+    function handlePrediction(data) {
+      if (data.error) {
+        console.warn('Server error:', data.error);
+        return;
+      }
+
+      // FPS
+      const fps = data.fps != null ? data.fps.toFixed(1) : '—';
+      $fpsBadge.textContent = `${fps} FPS`;
+      $statFps.textContent = fps;
+
+      // MediaPipe confidence
+      if (data.mediapipe_confidence != null) {
+        $statMpConf.textContent = (data.mediapipe_confidence * 100).toFixed(0) + '%';
+      } else {
+        $statMpConf.textContent = '—';
+      }
+
+      if (data.face_detected && data.vit_prediction) {
+        const label = data.vit_prediction.label;
+        const conf  = data.vit_prediction.confidence;
+        const color = EMOTION_COLORS[label] || '#6c8aff';
+        const emoji = EMOTION_EMOJIS[label] || '❓';
+
+        setFaceBadge(true);
+
+        // Overlay bbox
+        if (data.bbox) {
+          drawBBox(data.bbox, label, conf, color);
+        }
+
+        // Video emotion pill
+        $emotionLabel.style.display = '';
+        $emotionEmoji.textContent = emoji;
+        $emotionLabelT.textContent = `${label} — ${(conf * 100).toFixed(1)}%`;
+
+        // Sidebar
+        $statEmoji.textContent = emoji;
+        if (label !== prevEmotion) {
+          $statEmoji.classList.add('pop');
+          setTimeout(() => $statEmoji.classList.remove('pop'), 350);
+          prevEmotion = label;
+        }
+        $statEmoName.textContent = label;
+        $statConfVal.textContent = (conf * 100).toFixed(1) + '%';
+        $statConfBar.style.width = (conf * 100) + '%';
+
+        // Distribution (EMA blend)
+        const alpha = 0.25;
+        EMOTION_KEYS.forEach(k => {
+          distribution[k] *= (1 - alpha);
+        });
+        distribution[label] = distribution[label] + alpha * 1.0;
+        // Normalise for display
+        const total = EMOTION_KEYS.reduce((s, k) => s + distribution[k], 0) || 1;
+        EMOTION_KEYS.forEach(k => {
+          const pct = (distribution[k] / total) * 100;
+          const bar = document.getElementById(`dist-${k}`);
+          const val = document.getElementById(`distv-${k}`);
+          if (bar) bar.style.width = pct.toFixed(1) + '%';
+          if (val) val.textContent = pct.toFixed(0) + '%';
+        });
+
+      } else {
+        setFaceBadge(false);
+        clearOverlay();
+        $emotionLabel.style.display = 'none';
+        $statEmoji.textContent = '🔍';
+        $statEmoName.textContent = 'No Face';
+        $statConfVal.textContent = '0%';
+        $statConfBar.style.width = '0%';
+      }
+    }
+
+    /* ==========================================================
+       START / STOP SESSION
+       ========================================================== */
+    async function startSession() {
+      $btnStart.disabled = true;
+      $btnStop.disabled  = false;
+      running = true;
+      reconnectAttempts = 0;
+
+      await startWebcam();
+      connectWebSocket();
+    }
+
+    function stopSession() {
+      running = false;
+      $btnStart.disabled = false;
+      $btnStop.disabled  = true;
+
+      if (ws) { ws.close(); ws = null; }
+      stopWebcam();
+      clearOverlay();
+
+      setConnectionStatus('disconnected');
+      $emotionLabel.style.display = 'none';
+      $faceBadge.className = 'video-status-badge no-face';
+      $faceBadgeT.textContent = 'Waiting…';
+      $fpsBadge.textContent = '— FPS';
+    }
+
+    $btnStart.addEventListener('click', startSession);
+    $btnStop.addEventListener('click', stopSession);
+  </script>
+</body>
+</html>
