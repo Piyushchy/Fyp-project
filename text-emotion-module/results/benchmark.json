@@ -1,0 +1,357 @@
+{
+  "dataset": "mteb/emotion (MTEB EmotionClassification)",
+  "device": "cpu",
+  "torch_threads": 10,
+  "bert_base_parameters": 109483778,
+  "bert_base_reference": {
+    "hub_id": "bert-base-uncased",
+    "parameters": 109486854,
+    "latency": {
+      "median_ms": 20.907100006297696,
+      "p95_ms": 22.674680009367876,
+      "mean_ms": 20.797169999132166
+    },
+    "trained": false
+  },
+  "results": [
+    {
+      "model_key": "tinybert",
+      "display_name": "TinyBERT (4L-312D)",
+      "hub_id": "huawei-noah/TinyBERT_General_4L_312D",
+      "note": "General distillation of BERT-base: 4 layers, 312 hidden.",
+      "metrics": {
+        "accuracy": 0.9229607250755287,
+        "macro_precision": 0.8677341456305626,
+        "macro_recall": 0.9122063791802467,
+        "macro_f1": 0.885539040326267,
+        "weighted_f1": 0.9246820825072017,
+        "per_class": {
+          "sadness": {
+            "precision": 0.9602763385146805,
+            "recall": 0.9602763385146805,
+            "f1": 0.9602763385146805,
+            "support": 579
+          },
+          "joy": {
+            "precision": 0.9692780337941628,
+            "recall": 0.9171511627906976,
+            "f1": 0.9424943988050785,
+            "support": 688
+          },
+          "love": {
+            "precision": 0.7591623036649214,
+            "recall": 0.9294871794871795,
+            "f1": 0.8357348703170029,
+            "support": 156
+          },
+          "anger": {
+            "precision": 0.9363295880149812,
+            "recall": 0.9124087591240876,
+            "f1": 0.9242144177449169,
+            "support": 274
+          },
+          "fear": {
+            "precision": 0.9146919431279621,
+            "recall": 0.8616071428571429,
+            "f1": 0.8873563218390804,
+            "support": 224
+          },
+          "surprise": {
+            "precision": 0.6666666666666666,
+            "recall": 0.8923076923076924,
+            "f1": 0.7631578947368421,
+            "support": 65
+          }
+        }
+      },
+      "size": {
+        "parameters": 14352126,
+        "disk_mb": 54.75694274902344,
+        "smaller_than_bert_base": 7.6284013950267715
+      },
+      "latency": {
+        "median_ms": 2.770250001049135,
+        "p95_ms": 3.423005005606683,
+        "mean_ms": 2.8273429999535438
+      },
+      "throughput_sentences_per_second": 721.6200566513033,
+      "training_seconds": 774.5151131153107,
+      "confusion_matrix": [
+        [
+          556,
+          7,
+          2,
+          12,
+          2,
+          0
+        ],
+        [
+          5,
+          631,
+          44,
+          3,
+          0,
+          5
+        ],
+        [
+          1,
+          10,
+          145,
+          0,
+          0,
+          0
+        ],
+        [
+          10,
+          3,
+          0,
+          250,
+          11,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          2,
+          193,
+          24
+        ],
+        [
+          2,
+          0,
+          0,
+          0,
+          5,
+          58
+        ]
+      ]
+    },
+    {
+      "model_key": "distilbert",
+      "display_name": "DistilBERT (6L-768D)",
+      "hub_id": "distilbert-base-uncased",
+      "note": "Distilled BERT-base: 6 layers, retains ~97% of GLUE.",
+      "metrics": {
+        "accuracy": 0.9315206445115811,
+        "macro_precision": 0.8752146734711747,
+        "macro_recall": 0.9167479603745834,
+        "macro_f1": 0.8928987621069105,
+        "weighted_f1": 0.9330179473032443,
+        "per_class": {
+          "sadness": {
+            "precision": 0.9788359788359788,
+            "recall": 0.9585492227979274,
+            "f1": 0.9685863874345549,
+            "support": 579
+          },
+          "joy": {
+            "precision": 0.9799382716049383,
+            "recall": 0.9229651162790697,
+            "f1": 0.9505988023952096,
+            "support": 688
+          },
+          "love": {
+            "precision": 0.7743589743589744,
+            "recall": 0.967948717948718,
+            "f1": 0.8603988603988604,
+            "support": 156
+          },
+          "anger": {
+            "precision": 0.9184397163120568,
+            "recall": 0.9452554744525548,
+            "f1": 0.9316546762589928,
+            "support": 274
+          },
+          "fear": {
+            "precision": 0.9074074074074074,
+            "recall": 0.875,
+            "f1": 0.8909090909090909,
+            "support": 224
+          },
+          "surprise": {
+            "precision": 0.6923076923076923,
+            "recall": 0.8307692307692308,
+            "f1": 0.7552447552447552,
+            "support": 65
+          }
+        }
+      },
+      "size": {
+        "parameters": 66958086,
+        "disk_mb": 255.43677520751953,
+        "smaller_than_bert_base": 1.6351091337945354
+      },
+      "latency": {
+        "median_ms": 10.558649999438785,
+        "p95_ms": 12.467455003934447,
+        "mean_ms": 10.698951999511337
+      },
+      "throughput_sentences_per_second": 99.71986700982741,
+      "training_seconds": 2519.8257377147675,
+      "confusion_matrix": [
+        [
+          555,
+          5,
+          0,
+          14,
+          5,
+          0
+        ],
+        [
+          1,
+          635,
+          44,
+          3,
+          0,
+          5
+        ],
+        [
+          0,
+          4,
+          151,
+          1,
+          0,
+          0
+        ],
+        [
+          5,
+          3,
+          0,
+          259,
+          7,
+          0
+        ],
+        [
+          4,
+          0,
+          0,
+          5,
+          196,
+          19
+        ],
+        [
+          2,
+          1,
+          0,
+          0,
+          8,
+          54
+        ]
+      ]
+    },
+    {
+      "model_key": "mobilebert",
+      "display_name": "MobileBERT (24L-512D)",
+      "hub_id": "google/mobilebert-uncased",
+      "note": "Bottleneck architecture: 24 thin layers, inverted residuals.",
+      "metrics": {
+        "accuracy": 0.932527693856999,
+        "macro_precision": 0.8761873972812851,
+        "macro_recall": 0.9192704669556049,
+        "macro_f1": 0.8942151843367235,
+        "weighted_f1": 0.9340739798101683,
+        "per_class": {
+          "sadness": {
+            "precision": 0.975609756097561,
+            "recall": 0.9671848013816926,
+            "f1": 0.971379011274935,
+            "support": 579
+          },
+          "joy": {
+            "precision": 0.9875968992248062,
+            "recall": 0.9258720930232558,
+            "f1": 0.9557389347336834,
+            "support": 688
+          },
+          "love": {
+            "precision": 0.7704081632653061,
+            "recall": 0.967948717948718,
+            "f1": 0.8579545454545454,
+            "support": 156
+          },
+          "anger": {
+            "precision": 0.9169675090252708,
+            "recall": 0.927007299270073,
+            "f1": 0.9219600725952813,
+            "support": 274
+          },
+          "fear": {
+            "precision": 0.9065420560747663,
+            "recall": 0.8660714285714286,
+            "f1": 0.8858447488584474,
+            "support": 224
+          },
+          "surprise": {
+            "precision": 0.7,
+            "recall": 0.8615384615384616,
+            "f1": 0.7724137931034483,
+            "support": 65
+          }
+        }
+      },
+      "size": {
+        "parameters": 24585990,
+        "disk_mb": 93.92446899414062,
+        "smaller_than_bert_base": 4.453096173877888
+      },
+      "latency": {
+        "median_ms": 16.900650000025053,
+        "p95_ms": 18.210675002774224,
+        "mean_ms": 16.955579000350554
+      },
+      "throughput_sentences_per_second": 150.57687433548972,
+      "training_seconds": 2840.8724694252014,
+      "confusion_matrix": [
+        [
+          560,
+          1,
+          2,
+          12,
+          4,
+          0
+        ],
+        [
+          1,
+          637,
+          43,
+          1,
+          1,
+          5
+        ],
+        [
+          0,
+          5,
+          151,
+          0,
+          0,
+          0
+        ],
+        [
+          9,
+          2,
+          0,
+          254,
+          9,
+          0
+        ],
+        [
+          2,
+          0,
+          0,
+          9,
+          194,
+          19
+        ],
+        [
+          2,
+          0,
+          0,
+          1,
+          6,
+          56
+        ]
+      ]
+    }
+  ]
+}

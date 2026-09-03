@@ -1,0 +1,111 @@
+============================================================
+TRAINING  MobileBERT (24L-512D)
+Checkpoint google/mobilebert-uncased
+============================================================
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/1111 [00:00<?, ?it/s]Loading weights: 100%|##########| 1111/1111 [00:00<00:00, 28540.72it/s]
+[transformers] [1mMobileBertForSequenceClassification LOAD REPORT[0m from: google/mobilebert-uncased
+Key                                        | Status     | 
+-------------------------------------------+------------+-
+cls.predictions.transform.LayerNorm.bias   | UNEXPECTED | 
+cls.predictions.decoder.weight             | UNEXPECTED | 
+cls.predictions.decoder.bias               | UNEXPECTED | 
+cls.predictions.transform.dense.bias       | UNEXPECTED | 
+cls.predictions.dense.weight               | UNEXPECTED | 
+cls.predictions.transform.LayerNorm.weight | UNEXPECTED | 
+cls.predictions.transform.dense.weight     | UNEXPECTED | 
+cls.predictions.bias                       | UNEXPECTED | 
+cls.seq_relationship.weight                | UNEXPECTED | 
+cls.seq_relationship.bias                  | UNEXPECTED | 
+classifier.weight                          | MISSING    | 
+classifier.bias                            | MISSING    | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+Parameters 24.6M
+Train batches 499  Val batches 63  Test batches 63
+  epoch 1  step 50/499  loss 1.8477  1.10s/step
+  epoch 1  step 100/499  loss 1.8254  1.11s/step
+  epoch 1  step 150/499  loss 1.7472  1.13s/step
+  epoch 1  step 200/499  loss 1.6054  1.13s/step
+  epoch 1  step 250/499  loss 1.4569  1.13s/step
+  epoch 1  step 300/499  loss 1.3405  1.13s/step
+  epoch 1  step 350/499  loss 1.2285  1.12s/step
+  epoch 1  step 400/499  loss 1.1296  1.12s/step
+  epoch 1  step 450/499  loss 1.0495  1.12s/step
+  epoch 1  step 499/499  loss 0.9849  1.12s/step
+  epoch 1 validation  accuracy 0.9004  macro-F1 0.8700
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 19.73it/s]
+  saved checkpoint (best macro-F1 0.8700)
+  epoch 2  step 50/499  loss 0.3062  1.10s/step
+  epoch 2  step 100/499  loss 0.2954  1.11s/step
+  epoch 2  step 150/499  loss 0.2968  1.11s/step
+  epoch 2  step 200/499  loss 0.3020  1.11s/step
+  epoch 2  step 250/499  loss 0.2951  1.11s/step
+  epoch 2  step 300/499  loss 0.2904  1.11s/step
+  epoch 2  step 350/499  loss 0.2862  1.12s/step
+  epoch 2  step 400/499  loss 0.2808  1.12s/step
+  epoch 2  step 450/499  loss 0.2758  1.12s/step
+  epoch 2  step 499/499  loss 0.2743  1.12s/step
+  epoch 2 validation  accuracy 0.9160  macro-F1 0.8895
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 17.36it/s]
+  saved checkpoint (best macro-F1 0.8895)
+  epoch 3  step 50/499  loss 0.1926  1.09s/step
+  epoch 3  step 100/499  loss 0.1875  1.11s/step
+  epoch 3  step 150/499  loss 0.2031  1.11s/step
+  epoch 3  step 200/499  loss 0.2085  1.11s/step
+  epoch 3  step 250/499  loss 0.2045  1.11s/step
+  epoch 3  step 300/499  loss 0.2095  1.11s/step
+  epoch 3  step 350/499  loss 0.2105  1.11s/step
+  epoch 3  step 400/499  loss 0.2062  1.11s/step
+  epoch 3  step 450/499  loss 0.2075  1.11s/step
+  epoch 3  step 499/499  loss 0.2026  1.11s/step
+  epoch 3 validation  accuracy 0.9281  macro-F1 0.9023
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00,  3.10it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00,  3.10it/s]
+  saved checkpoint (best macro-F1 0.9023)
+  epoch 4  step 50/499  loss 0.1690  1.07s/step
+  epoch 4  step 100/499  loss 0.1712  1.09s/step
+  epoch 4  step 150/499  loss 0.1714  1.09s/step
+  epoch 4  step 200/499  loss 0.1667  1.09s/step
+  epoch 4  step 250/499  loss 0.1619  1.11s/step
+  epoch 4  step 300/499  loss 0.1627  1.11s/step
+  epoch 4  step 350/499  loss 0.1635  1.11s/step
+  epoch 4  step 400/499  loss 0.1624  1.11s/step
+  epoch 4  step 450/499  loss 0.1599  1.11s/step
+  epoch 4  step 499/499  loss 0.1604  1.11s/step
+  epoch 4 validation  accuracy 0.9341  macro-F1 0.9079
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 16.75it/s]
+  saved checkpoint (best macro-F1 0.9079)
+  epoch 5  step 50/499  loss 0.1606  1.11s/step
+  epoch 5  step 100/499  loss 0.1469  1.12s/step
+  epoch 5  step 150/499  loss 0.1389  1.11s/step
+  epoch 5  step 200/499  loss 0.1403  1.12s/step
+  epoch 5  step 250/499  loss 0.1372  1.12s/step
+  epoch 5  step 300/499  loss 0.1325  1.11s/step
+  epoch 5  step 350/499  loss 0.1309  1.11s/step
+  epoch 5  step 400/499  loss 0.1259  1.11s/step
+  epoch 5  step 450/499  loss 0.1272  1.11s/step
+  epoch 5  step 499/499  loss 0.1273  1.11s/step
+  epoch 5 validation  accuracy 0.9366  macro-F1 0.9120
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 16.68it/s]
+  saved checkpoint (best macro-F1 0.9120)
+Loading weights:   0%|          | 0/1111 [00:00<?, ?it/s]Loading weights:  79%|#######9  | 883/1111 [00:00<00:00, 8824.48it/s]Loading weights: 100%|##########| 1111/1111 [00:00<00:00, 8407.24it/s]
+[transformers] [1mMobileBertForSequenceClassification LOAD REPORT[0m from: C:\Users\piyus\Downloads\fyp\Fyp-project\text-emotion-module\checkpoints\mobilebert
+Key                              | Status     | 
+---------------------------------+------------+-
+classifier.{0, 1}.bias           | UNEXPECTED | 
+classifier.0.running_mean        | UNEXPECTED | 
+classifier.0.running_var         | UNEXPECTED | 
+classifier.{0, 1}.weight         | UNEXPECTED | 
+classifier.0.num_batches_tracked | UNEXPECTED | 
+classifier.weight                | MISSING    | 
+classifier.bias                  | MISSING    | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+
+TEST  accuracy 0.9325  macro-F1 0.8942
+
+Training complete. Run 'python benchmark.py' to compare.

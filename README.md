@@ -332,6 +332,13 @@ This ViT V2 model is the **visual emotion detection** component of a larger mult
 
 The ViT V2 ONNX model acts as the **visual emotion detection module**.
 
+The **text emotion detection module** lives in
+[`text-emotion-module/`](text-emotion-module/README.md). It fine-tunes and
+compares three compact transformers — TinyBERT, DistilBERT and MobileBERT — on
+the MTEB EmotionClassification dataset, and exposes the same kind of
+label-plus-confidence output that this ViT module produces, so the fusion stage
+can consume both.
+
 ## Development Workflow
 
 1. Clone the repository

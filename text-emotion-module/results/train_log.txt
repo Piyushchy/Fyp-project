@@ -1,0 +1,190 @@
+============================================================
+TRAINING  TinyBERT (4L-312D)
+Checkpoint huawei-noah/TinyBERT_General_4L_312D
+============================================================
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/71 [00:00<?, ?it/s]Loading weights: 100%|##########| 71/71 [00:00<00:00, 29806.38it/s]
+[transformers] [1mBertForSequenceClassification LOAD REPORT[0m from: huawei-noah/TinyBERT_General_4L_312D
+Key                                        | Status     | 
+-------------------------------------------+------------+-
+fit_denses.{0, 1, 2, 3, 4}.bias            | UNEXPECTED | 
+fit_denses.{0, 1, 2, 3, 4}.weight          | UNEXPECTED | 
+cls.predictions.decoder.weight             | UNEXPECTED | 
+cls.seq_relationship.bias                  | UNEXPECTED | 
+cls.seq_relationship.weight                | UNEXPECTED | 
+cls.predictions.transform.LayerNorm.bias   | UNEXPECTED | 
+cls.predictions.transform.dense.weight     | UNEXPECTED | 
+cls.predictions.bias                       | UNEXPECTED | 
+cls.predictions.transform.LayerNorm.weight | UNEXPECTED | 
+cls.predictions.transform.dense.bias       | UNEXPECTED | 
+classifier.weight                          | MISSING    | 
+classifier.bias                            | MISSING    | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+Parameters 14.4M
+Train batches 499  Val batches 63  Test batches 63
+  epoch 1  step 50/499  loss 1.7902  0.29s/step
+  epoch 1  step 100/499  loss 1.7726  0.29s/step
+  epoch 1  step 150/499  loss 1.7167  0.30s/step
+  epoch 1  step 200/499  loss 1.6466  0.30s/step
+  epoch 1  step 250/499  loss 1.5701  0.30s/step
+  epoch 1  step 300/499  loss 1.4934  0.30s/step
+  epoch 1  step 350/499  loss 1.4143  0.30s/step
+  epoch 1  step 400/499  loss 1.3412  0.30s/step
+  epoch 1  step 450/499  loss 1.2794  0.30s/step
+  epoch 1  step 499/499  loss 1.2248  0.30s/step
+  epoch 1 validation  accuracy 0.7887  macro-F1 0.7762
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 33.64it/s]
+  saved checkpoint (best macro-F1 0.7762)
+  epoch 2  step 50/499  loss 0.5829  0.30s/step
+  epoch 2  step 100/499  loss 0.5666  0.30s/step
+  epoch 2  step 150/499  loss 0.5336  0.30s/step
+  epoch 2  step 200/499  loss 0.5046  0.30s/step
+  epoch 2  step 250/499  loss 0.4826  0.30s/step
+  epoch 2  step 300/499  loss 0.4660  0.30s/step
+  epoch 2  step 350/499  loss 0.4483  0.30s/step
+  epoch 2  step 400/499  loss 0.4355  0.30s/step
+  epoch 2  step 450/499  loss 0.4180  0.30s/step
+  epoch 2  step 499/499  loss 0.4055  0.30s/step
+  epoch 2 validation  accuracy 0.9170  macro-F1 0.8932
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 24.65it/s]
+  saved checkpoint (best macro-F1 0.8932)
+  epoch 3  step 50/499  loss 0.2620  0.31s/step
+  epoch 3  step 100/499  loss 0.2553  0.31s/step
+  epoch 3  step 150/499  loss 0.2537  0.31s/step
+  epoch 3  step 200/499  loss 0.2503  0.31s/step
+  epoch 3  step 250/499  loss 0.2472  0.31s/step
+  epoch 3  step 300/499  loss 0.2448  0.31s/step
+  epoch 3  step 350/499  loss 0.2428  0.31s/step
+  epoch 3  step 400/499  loss 0.2428  0.31s/step
+  epoch 3  step 450/499  loss 0.2404  0.31s/step
+  epoch 3  step 499/499  loss 0.2371  0.31s/step
+  epoch 3 validation  accuracy 0.9220  macro-F1 0.8983
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 28.23it/s]
+  saved checkpoint (best macro-F1 0.8983)
+  epoch 4  step 50/499  loss 0.1825  0.29s/step
+  epoch 4  step 100/499  loss 0.1951  0.31s/step
+  epoch 4  step 150/499  loss 0.1984  0.30s/step
+  epoch 4  step 200/499  loss 0.1941  0.30s/step
+  epoch 4  step 250/499  loss 0.1898  0.30s/step
+  epoch 4  step 300/499  loss 0.1902  0.31s/step
+  epoch 4  step 350/499  loss 0.1887  0.31s/step
+  epoch 4  step 400/499  loss 0.1841  0.31s/step
+  epoch 4  step 450/499  loss 0.1796  0.31s/step
+  epoch 4  step 499/499  loss 0.1822  0.31s/step
+  epoch 4 validation  accuracy 0.9266  macro-F1 0.9054
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 27.44it/s]
+  saved checkpoint (best macro-F1 0.9054)
+  epoch 5  step 50/499  loss 0.1633  0.30s/step
+  epoch 5  step 100/499  loss 0.1565  0.30s/step
+  epoch 5  step 150/499  loss 0.1495  0.30s/step
+  epoch 5  step 200/499  loss 0.1513  0.31s/step
+  epoch 5  step 250/499  loss 0.1486  0.31s/step
+  epoch 5  step 300/499  loss 0.1515  0.30s/step
+  epoch 5  step 350/499  loss 0.1534  0.30s/step
+  epoch 5  step 400/499  loss 0.1485  0.30s/step
+  epoch 5  step 450/499  loss 0.1474  0.30s/step
+  epoch 5  step 499/499  loss 0.1489  0.30s/step
+  epoch 5 validation  accuracy 0.9316  macro-F1 0.9075
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 28.93it/s]
+  saved checkpoint (best macro-F1 0.9075)
+Loading weights:   0%|          | 0/73 [00:00<?, ?it/s]Loading weights: 100%|##########| 73/73 [00:00<00:00, 5490.32it/s]
+
+TEST  accuracy 0.9230  macro-F1 0.8855
+
+============================================================
+TRAINING  DistilBERT (6L-768D)
+Checkpoint distilbert-base-uncased
+============================================================
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|##########| 100/100 [00:00<00:00, 6162.57it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: distilbert-base-uncased
+Key                     | Status     | 
+------------------------+------------+-
+vocab_transform.weight  | UNEXPECTED | 
+vocab_transform.bias    | UNEXPECTED | 
+vocab_projector.bias    | UNEXPECTED | 
+vocab_layer_norm.bias   | UNEXPECTED | 
+vocab_layer_norm.weight | UNEXPECTED | 
+classifier.weight       | MISSING    | 
+pre_classifier.bias     | MISSING    | 
+classifier.bias         | MISSING    | 
+pre_classifier.weight   | MISSING    | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+Parameters 67.0M
+Train batches 499  Val batches 63  Test batches 63
+  epoch 1  step 50/499  loss 1.7949  1.43s/step
+  epoch 1  step 100/499  loss 1.7824  1.44s/step
+  epoch 1  step 150/499  loss 1.6507  1.46s/step
+  epoch 1  step 200/499  loss 1.4198  1.65s/step
+  epoch 1  step 250/499  loss 1.2174  1.63s/step
+  epoch 1  step 300/499  loss 1.0741  1.80s/step
+  epoch 1  step 350/499  loss 0.9671  1.78s/step
+  epoch 1  step 400/499  loss 0.8792  1.78s/step
+  epoch 1  step 450/499  loss 0.8120  1.75s/step
+  epoch 1  step 499/499  loss 0.7589  1.73s/step
+  epoch 1 validation  accuracy 0.9245  macro-F1 0.8988
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00,  8.52it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00,  8.50it/s]
+  saved checkpoint (best macro-F1 0.8988)
+  epoch 2  step 50/499  loss 0.1749  1.49s/step
+  epoch 2  step 100/499  loss 0.1807  2.32s/step
+  epoch 2  step 150/499  loss 0.1863  2.04s/step
+  epoch 2  step 200/499  loss 0.1915  1.91s/step
+  epoch 2  step 250/499  loss 0.1884  1.83s/step
+  epoch 2  step 300/499  loss 0.1863  1.77s/step
+  epoch 2  step 350/499  loss 0.1834  1.74s/step
+  epoch 2  step 400/499  loss 0.1804  1.72s/step
+  epoch 2  step 450/499  loss 0.1776  1.70s/step
+  epoch 2  step 499/499  loss 0.1727  1.68s/step
+  epoch 2 validation  accuracy 0.9346  macro-F1 0.9104
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00,  6.65it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00,  6.64it/s]
+  saved checkpoint (best macro-F1 0.9104)
+  epoch 3  step 50/499  loss 0.1151  1.48s/step
+  epoch 3  step 100/499  loss 0.1093  1.50s/step
+  epoch 3  step 150/499  loss 0.1202  1.50s/step
+  epoch 3  step 200/499  loss 0.1211  1.49s/step
+  epoch 3  step 250/499  loss 0.1230  1.50s/step
+  epoch 3  step 300/499  loss 0.1215  1.50s/step
+  epoch 3  step 350/499  loss 0.1212  1.49s/step
+  epoch 3  step 400/499  loss 0.1196  1.50s/step
+  epoch 3  step 450/499  loss 0.1186  1.51s/step
+  epoch 3  step 499/499  loss 0.1167  1.51s/step
+  epoch 3 validation  accuracy 0.9401  macro-F1 0.9140
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00,  7.64it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00,  7.63it/s]
+  saved checkpoint (best macro-F1 0.9140)
+Loading weights:   0%|          | 0/104 [00:00<?, ?it/s]Loading weights: 100%|##########| 104/104 [00:00<00:00, 5823.17it/s]
+
+TEST  accuracy 0.9315  macro-F1 0.8929
+
+============================================================
+TRAINING  MobileBERT (24L-512D)
+Checkpoint google/mobilebert-uncased
+============================================================
+Loading weights:   0%|          | 0/1111 [00:00<?, ?it/s]Loading weights: 100%|##########| 1111/1111 [00:00<00:00, 25270.04it/s]
+[transformers] [1mMobileBertForSequenceClassification LOAD REPORT[0m from: google/mobilebert-uncased
+Key                                        | Status     | 
+-------------------------------------------+------------+-
+cls.predictions.decoder.weight             | UNEXPECTED | 
+cls.seq_relationship.weight                | UNEXPECTED | 
+cls.seq_relationship.bias                  | UNEXPECTED | 
+cls.predictions.transform.LayerNorm.bias   | UNEXPECTED | 
+cls.predictions.transform.dense.weight     | UNEXPECTED | 
+cls.predictions.decoder.bias               | UNEXPECTED | 
+cls.predictions.bias                       | UNEXPECTED | 
+cls.predictions.transform.LayerNorm.weight | UNEXPECTED | 
+cls.predictions.transform.dense.bias       | UNEXPECTED | 
+cls.predictions.dense.weight               | UNEXPECTED | 
+classifier.bias                            | MISSING    | 
+classifier.weight                          | MISSING    | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+Parameters 24.6M
+Train batches 499  Val batches 63  Test batches 63
+  epoch 1  step 50/499  loss 6730050.6450  1.06s/step
+  epoch 1  step 100/499  loss 3630795.7105  1.06s/step
