@@ -1,0 +1,228 @@
+==============================================================
+   MUSKAN'S KAGGLE NOTEBOOK -- ChatGPT Prompt
+   Project: Audio Emotion Recognition (Multimodal System)
+   Your Role: Preprocessing + Feature Extraction + CNN Model
+==============================================================
+
+COPY EVERYTHING BELOW THIS LINE AND PASTE TO CHATGPT:
+--------------------------------------------------------------
+
+I am building a Multimodal Emotion Recognition system for a college project.
+I need you to generate a complete, single Kaggle notebook (Python cells)
+for my specific task. I will paste the code into Kaggle and run it with GPU.
+
+=== CONTEXT ===
+
+We have a dataset of audio .wav files stored in Kaggle with this folder structure:
+
+/kaggle/input/audio-emotion/
+    angry/
+    disgust/     <-- IGNORE (we filter to 5 emotions only)
+    fear/
+    happy/
+    neutral/     <-- IGNORE (we filter to 5 emotions only)
+    sad/
+    surprise/
+
+Each folder contains files from TWO datasets mixed together:
+
+(1) RAVDESS files -- named like: 03-01-05-01-01-01-01.wav
+    Format: Modality-Channel-Emotion-Intensity-Statement-Repetition-Actor
+    Emotion code is at index [2] when split by '-' (0-indexed):
+      '03'=happy, '04'=sad, '05'=angry, '06'=fearful, '08'=surprised
+      SKIP: '01'=neutral, '02'=calm, '07'=disgust
+
+(2) CREMA-D files -- named like: 1001_DFA_ANG_XX.wav
+    Format: ActorID_Sentence_Emotion_Level
+    Emotion code is at index [2] when split by '_' (0-indexed):
+      'HAP'=happy, 'SAD'=sad, 'ANG'=angry, 'FEA'=fear
+      SKIP: 'DIS'=disgust, 'NEU'=neutral
+    NOTE: CREMA-D has NO surprise emotion. That is fine and expected.
+
+=== MY RESPONSIBILITIES (Muskan) ===
+
+I am responsible for:
+  1. Project setup and global configuration
+  2. Parsing file paths + labels from the folder structure
+  3. MFCC feature extraction from raw audio
+  4. Saving extracted features to disk
+  5. Train/Val/Test split
+  6. CNN Encoder architecture (outputs 256-dim embedding)
+  7. Classifier Head (FC layers, 5 output classes)
+
+My teammate Yash handles the Dataset class, DataLoader, training loop,
+evaluation metrics, and inference. He will copy my CNN Encoder class into his notebook.
+
+=== 5 TARGET EMOTIONS AND LABEL MAPPING ===
+
+  "happy"    -> 0
+  "sad"      -> 1
+  "angry"    -> 2
+  "fear"     -> 3
+  "surprise" -> 4
+
+The folder name already gives the emotion label.
+But still validate via filename to catch any misplaced files.
+
+=== NOTEBOOK CELLS TO GENERATE ===
+
+--- CELL 1: Install and Imports ---
+- pip install librosa tqdm
+- Import: os, glob, re, pickle, numpy, librosa, torch, torch.nn, torch.nn.functional,
+  sklearn.model_selection, tqdm, collections, random, warnings
+
+--- CELL 2: Global Configuration ---
+Create a Python dictionary called CONFIG containing:
+  DATA_DIR      = "/kaggle/input/audio-emotion"
+  OUTPUT_DIR    = "/kaggle/working/processed"
+  EMOTIONS      = {"happy": 0, "sad": 1, "angry": 2, "fear": 3, "surprise": 4}
+  SAMPLE_RATE   = 22050
+  DURATION      = 3         (all audio trimmed or padded to exactly 3 seconds)
+  N_MFCC        = 40
+  N_FFT         = 2048
+  HOP_LENGTH    = 512
+  MAX_LEN       = 130       (fixed number of time frames)
+  RANDOM_SEED   = 42
+
+Also set all random seeds here: random.seed, numpy.seed, torch.manual_seed,
+torch.cuda.manual_seed_all, and set DEVICE = torch.device("cuda" if available else "cpu").
+
+Create the OUTPUT_DIR if it does not exist.
+
+--- CELL 3: File Parser ---
+Write a function called parse_files(data_dir, config) that:
+  - Iterates over each emotion folder (only the 5 target emotions)
+  - For every .wav file, detects dataset type by filename:
+      * If filename matches pattern like "03-01-05-..." (starts with 2 digits and a dash)
+        --> RAVDESS: get emotion from parts[2] after splitting by '-'
+        --> Only keep if parts[2] in {'03','04','05','06','08'}
+      * Else if filename matches pattern "1001_DFA_ANG_XX" (has underscores)
+        --> CREMA-D: get emotion from parts[2] after splitting by '_'
+        --> Only keep if parts[2] in {'HAP','SAD','ANG','FEA'}
+      * Else skip
+  - Map the detected emotion string to label integer from CONFIG["EMOTIONS"]
+  - Validate that the folder name matches the detected emotion (warn if not)
+  - Return a list of tuples: [(filepath, label_int), ...]
+  - After building the list, print:
+      Total valid files found: X
+      Class distribution: {emotion_name: count, ...}
+      Files from RAVDESS: X
+      Files from CREMA-D: X
+
+--- CELL 4: MFCC Feature Extraction ---
+Write a function called extract_mfcc(filepath, config) that:
+  - Loads audio using librosa.load at CONFIG["SAMPLE_RATE"]
+  - Computes target_length = SAMPLE_RATE * DURATION
+  - Pads with zeros if audio is shorter, trims if longer
+  - Extracts MFCC: librosa.feature.mfcc with n_mfcc, n_fft, hop_length from config
+  - Normalizes: (mfcc - mean) / (std + 1e-8)
+  - Pads or truncates time axis to MAX_LEN
+  - Returns numpy array of shape (40, 130)
+
+Write a function called extract_and_save_all(file_list, config) that:
+  - Creates a features list and labels list
+  - Iterates with tqdm progress bar
+  - Calls extract_mfcc for each file, catches and logs exceptions (skips bad files)
+  - Converts to numpy arrays
+  - Saves to OUTPUT_DIR:
+      features.npy  -> shape (N, 40, 130)
+      labels.npy    -> shape (N,)
+      filepaths.pkl -> list of file paths (for reference)
+  - Prints final shapes and number of skipped files
+
+--- CELL 5: Run Extraction ---
+  - Call parse_files to get file_list
+  - Call extract_and_save_all(file_list, CONFIG)
+  - Print "Feature extraction complete!"
+
+--- CELL 6: Train/Val/Test Split ---
+  - Load features.npy and labels.npy from OUTPUT_DIR
+  - First split: 85% train+val, 15% test (stratified)
+  - Second split: 70% train, 15% val from the 85% portion (stratified)
+  - Save:
+      X_train.npy, y_train.npy
+      X_val.npy,   y_val.npy
+      X_test.npy,  y_test.npy
+  - Print shape and class distribution of each split
+
+--- CELL 7: CNN Encoder Class ---
+Design a PyTorch nn.Module called CNNEncoder.
+  Input shape: (batch_size, 1, 40, 130)  -- 1 channel, freq x time
+
+  Architecture:
+    Conv Block 1: Conv2d(1,  32, kernel=3, padding=1) -> BatchNorm2d -> ReLU -> MaxPool2d(2,2)
+    Conv Block 2: Conv2d(32, 64, kernel=3, padding=1) -> BatchNorm2d -> ReLU -> MaxPool2d(2,2)
+    Conv Block 3: Conv2d(64,128, kernel=3, padding=1) -> BatchNorm2d -> ReLU -> MaxPool2d(2,2)
+    AdaptiveAvgPool2d(1, 1)
+    Flatten
+    Linear(128, 256) -> ReLU -> Dropout(0.3)
+    Output: (batch_size, 256)
+
+  IMPORTANT: The forward() method must accept input of shape (batch, 1, 40, 130)
+  and return a tensor of shape (batch, 256). This embedding will be passed to the Fusion
+  Layer later when combining with text and image modalities.
+
+--- CELL 8: Classifier Head and Combined Model ---
+Design EmotionClassifier (nn.Module):
+  Input: (batch, 256)
+  Linear(256, 128) -> ReLU -> Dropout(0.3) -> Linear(128, 5)
+  Output: (batch, 5) raw logits -- no softmax
+
+Design AudioEmotionModel (nn.Module):
+  self.encoder = CNNEncoder()
+  self.classifier = EmotionClassifier()
+  forward(x): x -> encoder -> embedding -> classifier -> logits
+
+--- CELL 9: Sanity Check ---
+  - Instantiate AudioEmotionModel and move to DEVICE
+  - Create dummy tensor: torch.randn(4, 1, 40, 130).to(DEVICE)
+  - Run forward pass
+  - Print output shape (expected: [4, 5])
+  - Print total trainable parameters
+  - Print "Model architecture verified!"
+
+=== IMPORTANT RULES FOR CODE GENERATION ===
+
+1. Add a comment header at the top of each cell:
+   # ============================================================
+   # CELL X: Title
+   # ============================================================
+
+2. Add markdown-style docstrings to every function.
+
+3. Use torch.device("cuda" if torch.cuda.is_available() else "cpu") throughout.
+
+4. All saved files go to /kaggle/working/processed/
+
+5. Do NOT write any training code -- that is my teammate's job.
+
+6. Make the CNNEncoder class fully self-contained and copy-pasteable,
+   since my teammate Yash will paste it into a separate Kaggle notebook.
+
+7. At the end of each cell, print a success confirmation message.
+
+=== OUTPUT FORMAT ===
+
+Return each cell as a separate Python code block.
+Clearly label each block. I will paste them into Kaggle cells one by one.
+
+--------------------------------------------------------------
+END OF PROMPT -- STOP COPYING HERE
+==============================================================
+
+AFTER YOU RECEIVE THE CODE FROM CHATGPT:
+------------------------------------------
+Step 1: Go to kaggle.com and sign in.
+Step 2: Upload your audio folder as a Kaggle Dataset:
+        Profile -> Datasets -> New Dataset -> Upload folder
+        Name it: audio-emotion
+Step 3: Create New Notebook -> Enable GPU (Settings -> Accelerator -> GPU T4 x2)
+Step 4: Add your dataset to the notebook via Add Data
+Step 5: Paste each code block into a separate notebook cell
+Step 6: Run all cells top to bottom
+Step 7: After Cell 5 runs, your /kaggle/working/processed/ folder will have the .npy files
+Step 8: Share the processed data with Yash:
+        Output tab -> "Save Version" -> Download files -> Send Yash the .npy files
+        OR: Publish notebook output as a Kaggle Dataset for Yash to add
+Step 9: Send Yash the FULL code from Cell 7 (CNNEncoder class)
+==============================================================

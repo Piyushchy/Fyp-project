@@ -1,0 +1,298 @@
+==============================================================
+   YASH'S KAGGLE NOTEBOOK -- ChatGPT Prompt
+   Project: Audio Emotion Recognition (Multimodal System)
+   Your Role: Dataset + Training + Evaluation + Inference
+==============================================================
+
+COPY EVERYTHING BELOW THIS LINE AND PASTE TO CHATGPT:
+--------------------------------------------------------------
+
+I am building a Multimodal Emotion Recognition system for a college project.
+I need you to generate a complete, single Kaggle notebook (Python cells)
+for my specific task. I will paste the code into Kaggle and run it with GPU.
+
+=== CONTEXT ===
+
+My teammate Muskan has already:
+  - Extracted MFCC features from audio files and saved them as .npy files
+  - Split the data into train/val/test sets
+  - Designed the CNN Encoder and Classifier model architecture
+
+She has shared the following files with me (I will add them as a Kaggle Dataset):
+  X_train.npy  -- shape: (N_train, 40, 130)   (MFCC features)
+  y_train.npy  -- shape: (N_train,)            (integer labels 0-4)
+  X_val.npy    -- shape: (N_val, 40, 130)
+  y_val.npy    -- shape: (N_val,)
+  X_test.npy   -- shape: (N_test, 40, 130)
+  y_test.npy   -- shape: (N_test,)
+
+She also shared the CNNEncoder class code which I will paste directly into my notebook
+(I will tell you where to put a placeholder for it).
+
+=== EMOTION LABEL MAPPING ===
+
+  0 = happy
+  1 = sad
+  2 = angry
+  3 = fear
+  4 = surprise
+
+=== MY RESPONSIBILITIES (Yash) ===
+
+I am responsible for:
+  1. Loading pre-extracted features
+  2. Building a PyTorch Dataset and DataLoader
+  3. Writing the full training loop (with early stopping)
+  4. Logging training metrics
+  5. Evaluation: accuracy, F1-score per class, confusion matrix
+  6. Inference: predict emotion from a new .wav file
+  7. Saving and exporting the trained model
+
+=== MODEL ARCHITECTURE (already designed by Muskan) ===
+
+I will paste Muskan's exact class definitions. As a placeholder, assume:
+
+  CNNEncoder:
+    Input:  (batch, 1, 40, 130)
+    Output: (batch, 256)  -- 256-dimensional audio embedding
+
+  EmotionClassifier:
+    Input:  (batch, 256)
+    Output: (batch, 5)   -- raw logits
+
+  AudioEmotionModel:
+    forward(x) = EmotionClassifier(CNNEncoder(x))
+    Input:  (batch, 1, 40, 130)
+    Output: (batch, 5)
+
+In my notebook I will paste Muskan's class code before my training cells.
+Please write a placeholder comment where I should paste it:
+  # ============================================================
+  # PASTE MUSKAN'S MODEL CLASSES HERE (CNNEncoder, EmotionClassifier, AudioEmotionModel)
+  # ============================================================
+
+=== NOTEBOOK CELLS TO GENERATE ===
+
+--- CELL 1: Install and Imports ---
+  pip install librosa tqdm seaborn
+  Import: os, numpy, torch, torch.nn, torch.optim, torch.utils.data (Dataset, DataLoader),
+  sklearn.metrics (accuracy_score, f1_score, classification_report, confusion_matrix),
+  matplotlib.pyplot, seaborn, tqdm, random, time, librosa, copy, json
+
+--- CELL 2: Configuration and Setup ---
+  Create a CONFIG dict with:
+    PROCESSED_DIR  = "/kaggle/input/muskan-processed"  (path to Muskan's .npy files)
+    MODEL_SAVE_DIR = "/kaggle/working/models"
+    EMOTIONS       = {0:"happy", 1:"sad", 2:"angry", 3:"fear", 4:"surprise"}
+    BATCH_SIZE     = 32
+    LEARNING_RATE  = 1e-3
+    NUM_EPOCHS     = 50
+    PATIENCE       = 7          (early stopping patience)
+    WEIGHT_DECAY   = 1e-4
+    RANDOM_SEED    = 42
+    N_MFCC         = 40
+    MAX_LEN        = 130
+
+  Set all random seeds (random, numpy, torch, cuda).
+  Set DEVICE = torch.device("cuda" if available else "cpu").
+  Create MODEL_SAVE_DIR.
+
+--- CELL 3: Model Placeholder ---
+  Write only this comment block (I will paste Muskan's classes here):
+  # ============================================================
+  # PASTE MUSKAN'S MODEL CLASSES HERE
+  # (CNNEncoder, EmotionClassifier, AudioEmotionModel)
+  # ============================================================
+
+--- CELL 4: PyTorch Dataset Class ---
+  Write a class called AudioDataset(torch.utils.data.Dataset):
+    __init__(self, features_path, labels_path, augment=False):
+      - Load features (X) from features_path using numpy
+      - Load labels (y) from labels_path using numpy
+      - Store augment flag
+    
+    __len__(self): return len(self.y)
+    
+    __getitem__(self, idx):
+      - Get feature of shape (40, 130), convert to float32 tensor
+      - Add channel dim: unsqueeze(0) -> shape (1, 40, 130)
+      - If augment=True, apply one random augmentation with 50% probability:
+          Option A: Time masking -- randomly zero out a contiguous block of up to 20 time frames
+          Option B: Frequency masking -- randomly zero out up to 8 frequency bands
+          Option C: Add Gaussian noise with std=0.01
+      - Return (feature_tensor, label_tensor_long)
+
+--- CELL 5: DataLoader Setup ---
+  - Instantiate AudioDataset for train (augment=True), val (augment=False), test (augment=False)
+  - Use paths from CONFIG
+  - Create DataLoaders with BATCH_SIZE, shuffle=True for train, shuffle=False for val/test
+  - Set num_workers=2, pin_memory=True (for GPU speed)
+  - Print dataset sizes and number of batches
+
+--- CELL 6: Model Instantiation and Loss ---
+  - Instantiate AudioEmotionModel and move to DEVICE
+  - Define loss: nn.CrossEntropyLoss()
+  - Define optimizer: torch.optim.Adam with lr and weight_decay from CONFIG
+  - Define scheduler: torch.optim.lr_scheduler.ReduceLROnPlateau
+      mode='min', factor=0.5, patience=3, verbose=True
+  - Print model parameter count
+  - Print "Model ready!"
+
+--- CELL 7: Training Loop ---
+  Write a function called train_model(model, train_loader, val_loader, config):
+
+    Implements:
+    - Epoch loop from 1 to NUM_EPOCHS
+    - For each epoch:
+        TRAIN PHASE:
+          model.train()
+          Iterate batches with tqdm
+          Zero grad -> forward -> loss -> backward -> step
+          Track: running loss, correct predictions, total samples
+          Compute train_loss and train_acc
+
+        VALIDATION PHASE:
+          model.eval()
+          with torch.no_grad():
+          Iterate val batches
+          Track: val loss, correct predictions
+          Compute val_loss and val_acc
+
+        LOGGING:
+          Print: Epoch X/N | Train Loss: X.XXXX | Train Acc: XX.XX% | Val Loss: X.XXXX | Val Acc: XX.XX%
+
+        SCHEDULER:
+          Call scheduler.step(val_loss)
+
+        EARLY STOPPING:
+          Track best_val_loss
+          If val_loss improved: save model state_dict to MODEL_SAVE_DIR/best_model.pth, reset patience counter
+          Else: increment patience counter
+          If patience counter >= PATIENCE: print "Early stopping triggered!" and break
+
+        HISTORY:
+          Save train_loss, val_loss, train_acc, val_acc for each epoch to a history dict
+
+    Return history dict
+
+--- CELL 8: Run Training ---
+  - Call train_model(model, train_loader, val_loader, CONFIG)
+  - Store result in history
+  - Print "Training complete!"
+
+--- CELL 9: Plot Training Curves ---
+  Create a 1x2 subplot figure (figsize 14x5):
+    Left plot:  Train Loss vs Val Loss per epoch
+    Right plot: Train Accuracy vs Val Accuracy per epoch
+  Both plots: proper axis labels, legend, title, grid
+  Save figure to /kaggle/working/training_curves.png
+  Display with plt.show()
+
+--- CELL 10: Evaluation on Test Set ---
+  Write a function called evaluate_model(model, test_loader, config):
+    - Load best model weights from MODEL_SAVE_DIR/best_model.pth
+    - model.eval() with torch.no_grad()
+    - Collect all predictions and ground truth labels
+    - Compute and print:
+        Overall Accuracy
+        Weighted F1-Score
+        Per-class F1-Score
+        Full classification report (sklearn)
+    - Plot confusion matrix as a heatmap (seaborn):
+        Annotated with counts
+        Axis labels as emotion names
+        Save to /kaggle/working/confusion_matrix.png
+    - Return overall accuracy and weighted F1
+
+  Call evaluate_model and print final results.
+
+--- CELL 11: Inference Function ---
+  Write a function called predict_emotion(wav_path, model, config):
+    - Load raw audio file with librosa
+    - Apply same preprocessing as Muskan's extract_mfcc:
+        Resample to SAMPLE_RATE=22050
+        Pad/trim to 3 seconds
+        Extract MFCC (n_mfcc=40, n_fft=2048, hop_length=512)
+        Normalize per sample
+        Pad/trim time axis to MAX_LEN=130
+    - Convert to tensor: shape (1, 1, 40, 130) -- batch and channel dims
+    - Move to DEVICE
+    - model.eval(), no_grad forward pass
+    - Apply softmax to get probabilities
+    - Return:
+        predicted_emotion (string label)
+        confidence (float, percentage)
+        all_probabilities (dict: emotion_name -> probability)
+    - Print the prediction nicely formatted
+
+  Test the function on one sample from the test set:
+    Pick a random .wav file path, run predict_emotion, display result.
+
+--- CELL 12: Model Export ---
+  Save the following to /kaggle/working/models/:
+    (a) best_model.pth         -- already saved during training
+    (b) model_full.pth         -- torch.save(model, ...) for full model
+    (c) model_config.json      -- save CONFIG dict as JSON
+    (d) model_info.txt         -- write: test accuracy, F1, num params, training date
+
+  Print paths of all saved files.
+  Print "Export complete! Ready for Fusion Layer integration."
+
+=== IMPORTANT RULES FOR CODE GENERATION ===
+
+1. Add a comment header at the top of each cell:
+   # ============================================================
+   # CELL X: Title
+   # ============================================================
+
+2. Add docstrings to every function.
+
+3. Use torch.device("cuda" if torch.cuda.is_available() else "cpu") throughout.
+
+4. In Cell 3, write ONLY the placeholder comment. Do not define any model classes
+   yourself -- I will paste Muskan's classes there.
+
+5. The inference function in Cell 11 must replicate Muskan's preprocessing
+   EXACTLY so that test-time features match training features:
+     - SAMPLE_RATE=22050, DURATION=3s, N_MFCC=40, N_FFT=2048, HOP_LENGTH=512, MAX_LEN=130
+     - Normalize: (mfcc - mean) / (std + 1e-8)
+
+6. The model saved in Cell 12 must expose the CNN encoder cleanly,
+   since the 256-dim embedding will later be used in the Transformer Fusion Layer
+   that combines audio, text, and image modalities.
+
+7. At the end of each cell, print a success confirmation message.
+
+8. Use seaborn and matplotlib for all plots. Save all plots to /kaggle/working/
+
+=== OUTPUT FORMAT ===
+
+Return each cell as a separate Python code block.
+Clearly label each block. I will paste them into Kaggle cells one by one.
+For Cell 3, just return the placeholder comment block -- nothing else.
+
+--------------------------------------------------------------
+END OF PROMPT -- STOP COPYING HERE
+==============================================================
+
+AFTER YOU RECEIVE THE CODE FROM CHATGPT:
+------------------------------------------
+Step 1: Go to kaggle.com and sign in.
+Step 2: Create New Notebook -> Enable GPU (Settings -> Accelerator -> GPU T4 x2)
+Step 3: Add Muskan's processed dataset (the .npy files she shared) via "Add Data"
+        Update CONFIG["PROCESSED_DIR"] to match the correct Kaggle input path
+Step 4: Paste each cell code block into separate notebook cells
+Step 5: Get Muskan's Cell 7 code (CNNEncoder, EmotionClassifier, AudioEmotionModel)
+        and paste it into Cell 3 of your notebook (where the placeholder comment is)
+Step 6: Run all cells top to bottom
+Step 7: After training, your /kaggle/working/ folder will have:
+          training_curves.png
+          confusion_matrix.png
+          models/best_model.pth
+          models/model_full.pth
+          models/model_config.json
+          models/model_info.txt
+Step 8: Share your results (accuracy, F1, confusion matrix image) with Muskan
+Step 9: The saved best_model.pth will be used later in the Fusion Layer
+        when combining audio + text + image modalities
+==============================================================
