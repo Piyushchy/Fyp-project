@@ -1,0 +1,78 @@
+{
+  "_comment": [
+    "Fusion parameters. Data, not code, so eval_fusion.py can tune them",
+    "and the report can cite the exact values a result was produced with.",
+    "per_class_f1 entries are the measured per-class F1 of each modality",
+    "on its own test set. They are normalised to mean 1.0 at load time,",
+    "so what matters is the ratio between classes within a modality, not",
+    "the absolute scale.",
+    "base_weight: relative trust in each modality overall, tuned by eval_fusion.py --tune against a mismatch mix of 0/10/20/35%. Face is below text because it measures materially weaker cross-dataset."
+  ],
+  "face": {
+    "source": "vit-emotion-v4, deployed configuration (aligned crop, multi-crop ensemble, T+logit_bias), measured on eval_data_unseen/test/webcam - a split held out from BOTH training and calibration fitting. The calibration was fitted on eval_data_unseen/calib/webcam, a disjoint set of images. Earlier versions of these numbers were measured on rows the calibration had been fitted on.",
+    "base_weight": 0.8,
+    "per_class_f1": {
+      "angry": 0.5,
+      "disgust": 0.1967,
+      "fear": 0.4348,
+      "happy": 0.7895,
+      "neutral": 0.4444,
+      "sad": 0.6087,
+      "surprise": 0.5047
+    },
+    "_note": "v4 on the untouched test split: 52.3% accuracy, 49.7% macro-F1, 44.4% neutral F1, against v3 48.0/46.9/38.6 and v2 32.9/32.5/19.4 on the same images. disgust stays low (0.20) and is left unsmoothed so fusion distrusts it.",
+    "_previous": {
+      "_comment": [
+        "The earlier values were measured before three deployment bugs",
+        "were fixed, so they described a pipeline that no longer runs:",
+        "the crop was ~5x tighter than training framing, the stored",
+        "temperature was below 1.0 and therefore sharpened rather than",
+        "softened, and no logit_bias was applied. The neutral entry is",
+        "the one that moved least in absolute terms but mattered most:",
+        "under the old pipeline the model emitted 'neutral' on 2 of 693",
+        "unseen faces, so its 0.3687 was not reproducible at all.",
+        "Keeping them here because fusion weights are tuned against",
+        "these ratios and the change should be auditable."
+      ],
+      "angry": 0.4365,
+      "disgust": 0.2878,
+      "fear": 0.3727,
+      "happy": 0.8,
+      "neutral": 0.3687,
+      "sad": 0.567,
+      "surprise": 0.43
+    }
+  },
+  "text": {
+    "source": "benchmark_goemotions.json (TinyBERT (4L-312D))",
+    "base_weight": 1.0,
+    "per_class_f1": {
+      "angry": 0.5326,
+      "disgust": 0.4976,
+      "fear": 0.6139,
+      "happy": 0.8184,
+      "neutral": 0.561,
+      "sad": 0.5485,
+      "surprise": 0.5947
+    },
+    "_note": "per_class_f1 from the GoEmotions test split (4968 rows), TinyBERT."
+  },
+  "dynamics": {
+    "_comment": [
+      "text_half_life_seconds: how long until a message counts for half.",
+      "Face evidence is continuous and text arrives in bursts, so without",
+      "decay a single old message would pin the fused label forever.",
+      "30s is roughly conversational turn scale.",
+      "text_cutoff_seconds: past this the message contributes nothing at",
+      "all, so a stale session collapses cleanly to face-only rather than",
+      "trailing an ever-smaller but nonzero term.",
+      "low_agreement_threshold: Bhattacharyya coefficient below which two differing predictions count as a conflict. 0.80 rather than something near 0 because over 7 classes the shared tails floor the coefficient around 0.4 even for fully opposed peaked distributions - see the measured table in fusion.agreement()."
+    ],
+    "text_half_life_seconds": 30.0,
+    "text_cutoff_seconds": 180.0,
+    "min_informative_tokens": 8.0,
+    "min_effective_weight": 0.02,
+    "fusion_temperature": 1.0,
+    "low_agreement_threshold": 0.8
+  }
+}

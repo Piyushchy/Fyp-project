@@ -1,9 +1,51 @@
-# Emotion Recognition — Backend Dependencies
-# Install with:  pip install -r requirements.txt
+# Multimodal Emotion Recognition - deployment dependencies
+#
+#   pip install -r requirements.txt
+#   python setup_models.py        # then fetch the YuNet detector
+#
+# mediapipe is deliberately absent. The original server imported it and
+# branched on hasattr(mp, "solutions"), but mediapipe 0.10.x on recent
+# Python ships only mediapipe.tasks - so that branch was always false
+# and every request silently fell through to the Haar cascade. Face
+# detection now uses cv2.FaceDetectorYN (YuNet), which is bundled with
+# OpenCV and returns the five landmarks the aligned crop needs.
 
+# --- server ---
 fastapi>=0.100.0
 uvicorn[standard]>=0.23.0
-opencv-python>=4.8.0
-mediapipe>=0.10.0
-onnxruntime>=1.15.0
+pydantic>=2.0
+
+# --- face modality ---
+opencv-python>=4.8.0      # 4.8+ required for cv2.FaceDetectorYN
 numpy>=1.24.0
+
+# Exactly ONE onnxruntime wheel. Both wheels install into the same
+# `onnxruntime` package directory, so having both means whichever was
+# installed last overwrites the other's onnxruntime_pybind11_state.pyd.
+# That is a silent failure: the CUDA provider .dll is still on disk, so
+# nothing errors, but get_available_providers() drops
+# CUDAExecutionProvider and every frame falls back to CPU. Measured on
+# an RTX 4060 that is 303 ms/frame instead of 6.6 ms/frame.
+#
+# If the GPU is not being used, check for the conflict first:
+#     pip list | grep onnxruntime      # must show one line, not two
+#     python -c "import onnxruntime; print(onnxruntime.get_device())"
+# and repair with:
+#     pip uninstall -y onnxruntime onnxruntime-gpu
+#     pip install onnxruntime-gpu
+#
+# onnxruntime-gpu needs cuDNN/cuBLAS on the DLL search path; a CUDA
+# build of torch already ships them and face_pipeline._register_cuda_dlls
+# points the loader at them, so no separate CUDA toolkit is required.
+# Swap to plain `onnxruntime` for a CPU-only deployment.
+onnxruntime-gpu>=1.15.0
+# onnxruntime>=1.15.0     # CPU-only alternative - never both at once
+
+# --- text modality ---
+# CPU builds, matching the deployment target:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+transformers>=4.40
+
+# --- evaluation only (not needed to run the server) ---
+# datasets>=3.0           # prepare_eval_data.py downloads RAF-DB

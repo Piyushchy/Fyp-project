@@ -19,30 +19,41 @@ from sklearn.metrics import (
     recall_score,
 )
 
-from config import ID2LABEL, NUM_LABELS
+from config import ID2LABEL
 
 
 # ============================================================
 # AGGREGATE METRICS
 # ============================================================
 
-def compute_metrics(labels, predictions):
-    """Accuracy plus macro precision / recall / F1, and per-class scores."""
+def compute_metrics(labels, predictions, id2label=None):
+    """Accuracy plus macro precision / recall / F1, and per-class scores.
+
+    id2label selects the label space. It defaults to the six-class
+    MTEB one so existing callers are unaffected; the GoEmotions task
+    passes its own seven-class map. Scoring a model against the wrong
+    label space would silently produce plausible-looking numbers, so
+    the caller is made to be explicit about which one it means.
+    """
+
+    id2label = ID2LABEL if id2label is None else id2label
+
+    num_labels = len(id2label)
 
     per_class_precision, per_class_recall, per_class_f1, support = (
         precision_recall_fscore_support(
             labels,
             predictions,
-            labels=list(range(NUM_LABELS)),
+            labels=list(range(num_labels)),
             zero_division=0,
         )
     )
 
-    # Every aggregate is averaged over the full six-class label
-    # set, not just the classes that happen to appear. Otherwise
-    # a model that never predicts 'surprise' would be scored on
-    # five classes and look better than it is.
-    all_labels = list(range(NUM_LABELS))
+    # Every aggregate is averaged over the full label set, not just
+    # the classes that happen to appear. Otherwise a model that never
+    # predicts 'surprise' would be scored on the remaining classes
+    # and look better than it is.
+    all_labels = list(range(num_labels))
 
     return {
         "accuracy": float(accuracy_score(labels, predictions)),
@@ -71,13 +82,13 @@ def compute_metrics(labels, predictions):
             )
         ),
         "per_class": {
-            ID2LABEL[index]: {
+            id2label[index]: {
                 "precision": float(per_class_precision[index]),
                 "recall": float(per_class_recall[index]),
                 "f1": float(per_class_f1[index]),
                 "support": int(support[index]),
             }
-            for index in range(NUM_LABELS)
+            for index in range(num_labels)
         },
     }
 
@@ -86,13 +97,15 @@ def compute_metrics(labels, predictions):
 # CONFUSION MATRIX
 # ============================================================
 
-def compute_confusion_matrix(labels, predictions):
+def compute_confusion_matrix(labels, predictions, id2label=None):
     """Raw counts, rows = true label, columns = predicted label."""
+
+    id2label = ID2LABEL if id2label is None else id2label
 
     return confusion_matrix(
         labels,
         predictions,
-        labels=list(range(NUM_LABELS)),
+        labels=list(range(len(id2label))),
     )
 
 

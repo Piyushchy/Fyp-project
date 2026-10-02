@@ -1,386 +1,367 @@
-# ViT V2 ONNX Facial Emotion Detection
+# Multimodal Emotion Recognition
 
-Real-time facial emotion detection using a fine-tuned Vision Transformer (ViT V2) model exported to ONNX format.
-
-The system detects **one face at a time** from a webcam and classifies the facial expression into one of seven emotions.
-
-## Emotions
-
-| Label | Emotion  |
-|-------|----------|
-| 0     | Angry    |
-| 1     | Disgust  |
-| 2     | Fear     |
-| 3     | Happy    |
-| 4     | Neutral  |
-| 5     | Sad      |
-| 6     | Surprise |
-
-## Project Structure
+Real-time emotion recognition from **face and text together**. A Vision
+Transformer reads facial expression from a webcam, a fine-tuned compact
+transformer reads typed messages, and a reliability-weighted pool fuses
+them into a single answer that explains how it was reached.
 
 ```
-vit-emotion-v2-deployment/
-│
-├── emotion_config.json
-├── realtime_inference_onnx.py
-├── vit-emotion-v2.onnx
-├── vit-emotion-v2.onnx.data
-└── README.md
+webcam ──▶ YuNet detect ──▶ adaptive crop ──▶ ViT ONNX ──▶ smooth ──┐
+                                                                     ├──▶ fused emotion
+chat  ──▶ TinyBERT (GoEmotions) ──────────────▶ decay with age ──────┘
 ```
 
-> **Important:** `vit-emotion-v2.onnx` and `vit-emotion-v2.onnx.data` are part of the same ONNX model and **must remain together** in the same folder. Do not rename, delete, or separate the `.onnx.data` file.
+Both modalities predict over the **same seven classes**, so their
+probability vectors are directly comparable:
 
-## Requirements
+```
+angry · disgust · fear · happy · neutral · sad · surprise
+```
 
-- Python 3.10 or 3.11 recommended
-- Webcam
-- Windows, Linux, or macOS
-- CPU is sufficient — NVIDIA GPU is **not** required
-- Inference runs via ONNX Runtime
+---
 
-## Setup
-
-### 1. Clone the repository
+## Run it
 
 ```bash
-git clone https://github.com/Piyushchy/Fyp-project.git
-cd Fyp-project/vit-emotion-v2-deployment
+python -m venv .venv && .venv\Scripts\activate      # Windows
+
+cd vit-emotion-v2-deployment
+pip install -r requirements.txt   # curated; root requirements.txt is a full freeze
+python setup_models.py            # one-time: YuNet face detector (227 KB)
+uvicorn server:app --port 8000
 ```
 
-### 2. Create a virtual environment
+Open **http://localhost:8000/**.
 
-**Windows:**
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-```
+Serve the page from the server rather than opening `index.html` off
+disk — the client derives the WebSocket address from `window.location`,
+and a `file://` URL has no host to derive it from.
 
-**Linux / macOS:**
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 3. Install dependencies
+The text modality needs a trained checkpoint (~26 min on CPU):
 
 ```bash
-pip install numpy opencv-python onnxruntime
+cd text-emotion-module
+python train.py --task goemotions --model tinybert
 ```
 
-### 4. Verify installation
+Without one the server still runs face-only and the UI says so.
+
+### GPU (optional, ~7x faster)
 
 ```bash
-python -c "import cv2,numpy,onnxruntime; print('Setup successful')"
+pip install onnxruntime-gpu
+pip install torch --index-url https://download.pytorch.org/whl/cu130
 ```
 
-Expected output:
-```
-Setup successful
-```
+Both modalities use it automatically and fall back to CPU silently when
+it is absent; `GET /health` reports which. Measured on an RTX 4060, ViT
+batch-of-8: **63 ms CPU → 8.8 ms CUDA**. `EMOTION_DEVICE=cpu` forces CPU.
 
-## Run the Application
+---
 
-Make sure the virtual environment is activated, then run:
+## Repository layout
+
+| Directory | What is in it |
+|---|---|
+| [`vit-emotion-v2-deployment/`](vit-emotion-v2-deployment/README.md) | The running system: face pipeline, fusion, FastAPI server, web UI, evaluation |
+| [`text-emotion-module/`](text-emotion-module/README.md) | The text modality: two training tasks, three architectures compared, benchmarks |
+| [`training/`](training/) | Multi-dataset retraining for the face ViT: local GPU script + Colab notebook |
+
+Each directory has its own README with the detail. This page is the map.
+
+---
+
+## The face modality
+
+A ViT fine-tuned for seven-class facial expression, exported to ONNX.
+
+**Measured on FER2013's test split: 74.40% accuracy / 73.72%
+macro-F1.** The project README previously claimed 67.69%; running the
+model directly shows it is better than that.
+
+The problem is not the in-dataset score. It is that the same weights
+score **51.80%** on RAF-DB — faces the model has never seen the like
+of. That 23-point gap is what a webcam user actually experiences, and
+it is the engineering problem this work attacks.
+
+### What the inference-time changes are actually worth
+
+> **Corrected.** An earlier revision of this README claimed eye-line
+> alignment was worth about +4 macro-F1. That was measured on
+> composited out-of-distribution images where both configurations
+> scored badly, so the comparison was meaningless. Measured on the
+> model's own distribution, alignment is a net loss on upright faces.
+
+First, a sanity check the original work skipped: run the ONNX model on
+FER2013 with a plain resize and no detector at all.
+
+**74.50% accuracy / 72.83% macro-F1** — *better* than the 67.69% this
+README used to claim. The weights and the preprocessing config were
+never the problem.
+
+Then, varying only the crop:
+
+| configuration | FER2013 accuracy | macro-F1 |
+|---|---|---|
+| raw resize, no detector | **71.93%** | **70.63%** |
+| detector + box crop | 70.76% | 69.19% |
+| detector + aligned warp (best of 40 geometries) | 66.55% | 63.85% |
+
+Alignment loses everywhere. It resamples an already small crop and
+replicates edge pixels; on an upright face there is no pose error to
+win back.
+
+It inverts under roll, though — aligned minus box crop:
+
+| roll | 0° | 10° | 15° | 20° | 25° | 30° |
+|---|---|---|---|---|---|---|
+| delta | −2.8 | −3.3 | −3.1 | **+4.2** | **+5.5** | **+8.7** |
+
+So the deployed default is **adaptive**: box crop below ~18° of roll,
+aligned warp above it. Pay for the warp only where it buys something.
+
+Also fixed along the way: the original `server.py` branched on
+`hasattr(mp, "solutions")` to choose MediaPipe over Haar. On this
+environment mediapipe 0.10.35 under Python 3.14 ships only
+`mediapipe.tasks`, so that test was always false and **every request
+silently took the Haar path** — which is why `mediapipe_confidence`
+always rendered as `—`.
+
+### The actual problem: cross-dataset generalisation
+
+| dataset | accuracy | |
+|---|---|---|
+| FER2013 test | **74.40%** | the model's own distribution |
+| RAF-DB | **51.80%** | never seen in training |
+
+A 23-point drop on unseen faces, and no crop tuning touches it. This is
+what a webcam user experiences, and it needs retraining.
+
+### Retraining on three datasets (`training/`)
 
 ```bash
-python realtime_inference_onnx.py
+cd training
+python prepare_face_data.py      # merges the corpus, ~15 min
+python train_face.py             # ~30-50 min on an RTX 4060
 ```
 
-The application will:
+Same architecture, same seven-class head, same ONNX signature — only
+the data changes:
 
-1. Open the webcam
-2. Detect a face
-3. Crop the detected face
-4. Resize it to 224 × 224
-5. Preprocess the image
-6. Run the ViT V2 ONNX model
-7. Predict the facial emotion
-8. Display the emotion and confidence on the video
+| source | images | why it is there |
+|---|---|---|
+| FER2013 train | 28,709 | volume, and the distribution the current model knows |
+| AffectNet | 27,823 | real photographs, better labels |
+| RAF-DB | 20,471 | real photographs, crowd-annotated |
+| **total** | **77,003** | |
 
-Press **Q** to close the application.
+Plus class-balanced loss and webcam-domain augmentation — JPEG
+artefacts, motion blur, uneven exposure, occlusion, grayscale.
 
-## Processing Pipeline
+**Result** (3 epochs, ~30 min on an RTX 4060), accuracy / macro-F1:
 
-```
-Webcam
-  → Video Frame
-  → OpenCV Face Detection
-  → Face Crop
-  → RGB Conversion
-  → Resize to 224 × 224
-  → Normalization
-  → ViT V2 ONNX Model
-  → Emotion Prediction
-  → Emotion + Confidence
-```
+| test set | v2 (FER2013 only) | v3 (3 datasets) | delta |
+|---|---|---|---|
+| FER2013 test — v2's home turf | 72.90% / 72.77% | 69.04% / 66.20% | −3.9 / −6.6 |
+| **A 4th dataset, unseen by both** | 40.57% / 36.74% | **48.00% / 46.61%** | **+7.4 / +9.9** |
 
-## Model Information
+**v3 is worse on FER2013 and better on everything else** — which is the
+trade, stated in both directions. v2 was trained on FER2013, so FER2013
+flatters it. The second row is the one that describes a stranger at a
+webcam, and on unseen faces `disgust` goes from 5.5 to 28.8 F1 and
+`sad` from 38.7 to 56.7.
 
-**Input**
-- Name: `pixel_values`
-- Shape: `[batch_size, 3, 224, 224]`
-- Type: `float32`
+v3 is the deployed default; `EMOTION_MODEL=v2` switches back.
 
-**Output**
-- Name: `logits`
-- Shape: `[batch_size, 7]`
-- Type: `float32`
+`train_face_vit.ipynb` is the Colab/Kaggle version for machines without
+a local GPU.
 
-**Class Mapping**
+---
 
-```
-0 → angry
-1 → disgust
-2 → fear
-3 → happy
-4 → neutral
-5 → sad
-6 → surprise
-```
+## The text modality
 
-## Image Preprocessing
+Three compact transformers fine-tuned and compared, on two tasks.
 
-1. Detect face
-2. Crop face
-3. Convert BGR to RGB
-4. Resize to 224 × 224
-5. Convert image to float32
-6. Normalize pixel values
-7. Convert image from HWC to CHW
-8. Add batch dimension
-9. Pass tensor to ONNX model
+| Model | Params | MTEB (6-class) acc | Latency |
+|---|---|---|---|
+| TinyBERT (4L-312D) | 14.4M | 92.30% | 2.8 ms |
+| DistilBERT (6L-768D) | 67.0M | 93.15% | 10.6 ms |
+| MobileBERT (24L-512D) | 24.6M | 93.25% | 16.9 ms |
 
-## Face Detection
+BERT-base and RoBERTa are deliberately excluded — the visual module
+already committed the project to real-time CPU inference.
 
-The current implementation uses OpenCV's **Haar Cascade** face detector to locate the face. The ViT V2 model then classifies the facial expression. Only **one face** is processed at a time.
+**But the six-class MTEB label space could not be deployed.** It has no
+`neutral` and no `disgust`. Since most typed messages in a live session
+are affectively neutral, a six-class model asserts an emotion on every
+one of them, having no way to say "nothing in particular" — and two of
+the seven fused classes could only ever be argued for by one modality.
 
-## Real-Time Processing
+So a second task was added: **GoEmotions**, collapsed onto the seven
+shared classes using the grouping published with the GoEmotions paper.
 
-The application can skip frames to improve real-time performance:
+**TinyBERT/GoEmotions: 65.64% accuracy / 59.52% macro-F1**, over all
+seven classes.
 
-```python
-PROCESS_EVERY_N_FRAMES = 2
-```
+That is far below the 92.30% on MTEB, and the drop is expected rather
+than a regression. MTEB emotion is first-person *"i feel X"* tweets —
+near-template phrasing where the label is often stated outright.
+GoEmotions is real Reddit comments, seven classes, with `neutral`
+covering a third of the data. **The MTEB figure was optimistic for the
+deployment setting; the GoEmotions figure is the one that reflects what
+the live system does.**
 
-| Value | Behavior                    |
-|-------|------------------------------|
-| 1     | Process every frame          |
-| 2     | Process every second frame   |
-| 3     | Process every third frame    |
+---
 
-A higher value can improve performance on slower systems, but the displayed emotion will update less frequently.
+## Fusion
 
-## Confidence Score
-
-The application displays the probability of the predicted emotion, e.g.:
+A **weighted logarithmic opinion pool** — a weighted geometric mean of
+the two probability vectors:
 
 ```
-happy (87.4%)
+log s[c] = Σ_m  e_m · r_m[c] · (log p_m[c] − mean_c log p_m[c])
 ```
 
-This means the model assigned ~87.4% probability to the "happy" class. The confidence score should **not** be interpreted as a guarantee that a person is experiencing that emotion — the system estimates emotion from visible facial features only.
+An arithmetic average can never be more confident than its inputs. The
+geometric pool multiplies, so a class both modalities find plausible is
+reinforced and one either confidently rules out is suppressed — the
+right form when the modalities are close to conditionally independent
+given the true emotion.
 
-## Model Performance
-
-**Overall (ViT V2 evaluation results)**
-
-| Metric          | Score  |
-|-----------------|--------|
-| Accuracy        | 67.69% |
-| Macro Precision | 65.30% |
-| Macro Recall    | 68.04% |
-| Macro F1        | 66.46% |
-
-**Per-Emotion Results**
-
-| Emotion  | Precision | Recall | F1-Score |
-|----------|-----------|--------|----------|
-| Angry    | 57.92%    | 59.49% | 58.69%   |
-| Disgust  | 61.15%    | 77.98% | 68.55%   |
-| Fear     | 55.24%    | 49.41% | 52.16%   |
-| Happy    | 88.42%    | 84.59% | 86.46%   |
-| Neutral  | 62.06%    | 64.16% | 63.10%   |
-| Sad      | 56.93%    | 56.79% | 56.86%   |
-| Surprise | 75.39%    | 83.87% | 79.41%   |
-
-The model performs particularly well for **Happy** and **Surprise**, and comparatively lower for **Fear**, **Sad**, and **Angry**.
-
-## Why ONNX?
-
-The original model was trained as a Vision Transformer and exported to ONNX for deployment:
+The exponent `e_m` is how much this particular observation is worth:
 
 ```
-Fine-Tuned ViT → ONNX Export → vit-emotion-v2.onnx → ONNX Runtime → CPU Inference → Real-Time Emotion Detection
+e_face = 0.8 · quality                       (detector confidence, crop size,
+                                              blur, exposure, head pose,
+                                              temporal stability)
+e_text = 1.0 · recency · informativeness     (0.5^(age/30s); min(1, tokens/8))
 ```
 
-ONNX Runtime allows the trained model to run without the full training environment, keeping deployment lightweight and suitable for CPU-based inference.
+The base weights are tuned against a mix of mismatch rates. Face sits
+below text because it measures materially weaker cross-dataset.
 
-## Why CPU Instead of NVIDIA GPU?
+**The key asymmetry is recency.** The camera reports the face
+continuously, so face evidence is always about *now*. A typed message is
+a single observation at a single instant, and its relevance decays.
+Without that term one message would pin the fused label for the rest of
+the session. The UI shows the decay happening.
 
-This deployment targets systems without a dedicated NVIDIA GPU. ONNX Runtime performs inference on the CPU by default. The model is relatively small, and only one face is processed at a time — making CPU-based deployment practical for real-time use. A GPU execution provider could be added later if more performance is needed.
+Per-class reliability `r_m[c]` weights each modality by how well it
+actually performs on that class, so each leads where it is strong.
 
-## Troubleshooting
+### Does it work?
 
-**ONNX Runtime is missing**
-```
-ModuleNotFoundError: No module named 'onnxruntime'
-```
-Fix: `pip install onnxruntime`
+No paired face+text corpus exists — nobody recorded a person's face and
+their message at the same instant with one agreed label. So the
+evaluation is a **controlled simulation**: real per-modality confusion
+profiles, synthetic pairing, with the mismatch rate as the independent
+variable. Crucially nothing is *trained* on the synthetic pairs.
 
-**OpenCV is missing**
-```
-ModuleNotFoundError: No module named 'cv2'
-```
-Fix: `pip install opencv-python`
+*(The earlier `Training_program_cycling.py` paired an arbitrary face
+with an arbitrary sentence by `i % len(files)` and then trained on the
+result — which teaches the fusion layer the very assumption it was
+supposed to test. That script is superseded and not used.)*
 
-**NumPy is missing**
-```
-ModuleNotFoundError: No module named 'numpy'
-```
-Fix: `pip install numpy`
+**Fusion only helps if the modalities are calibrated:**
 
-**CascadeClassifier error**
-```
-AttributeError: module 'cv2' has no attribute 'CascadeClassifier'
-```
-Check your OpenCV install:
-```bash
-python -c "import cv2; print(cv2.__version__); print(hasattr(cv2,'CascadeClassifier'))"
-```
-If necessary, reinstall OpenCV:
-```bash
-pip uninstall opencv-python opencv-contrib-python opencv-python-headless -y
-pip install opencv-python==4.10.0.84
-```
+| confidence gap | best single | fused | gain |
+|---|---|---|---|
+| 0.0 | 65.72% | 57.30% | **−8.43** |
+| 1.0 | 67.58% | 66.88% | −0.70 |
+| 1.5 | 68.83% | **70.67%** | **+1.85** |
+| 3.0 | 71.23% | 74.25% | +3.02 |
 
-**Webcam does not open**
-```
-Could not open webcam
-```
-Check that:
-- The webcam is connected
-- No other application is using the webcam
-- Camera permissions are enabled
-- Python/VS Code has camera access
+"Confidence gap" is how much less peaked a wrong prediction is than a
+right one. At zero — a model equally confident whether right or wrong —
+no weighting scheme can beat the better single modality, and the table
+shows fusion *losing* 8.4 points. **Calibration is not a finishing
+touch here; it is the precondition.** Both modalities are temperature
+scaled, which is what moves the system out of the top row.
 
-The default camera is `cv2.VideoCapture(0)`. If multiple cameras are available, try `cv2.VideoCapture(1)` or `cv2.VideoCapture(2)`.
+**And the gain holds as the modalities drift apart:**
 
-**ONNX model cannot be loaded**
+| mismatch | best single | fused | gain |
+|---|---|---|---|
+| 0% | 68.83% | 70.67% | +1.85 |
+| 10% | 61.88% | 64.90% | +3.02 |
+| 20% | 56.45% | 59.85% | +3.40 |
+| 50% | 39.92% | 44.57% | +4.65 |
 
-Make sure `vit-emotion-v2.onnx` and `vit-emotion-v2.onnx.data` are located in the same directory.
+The gain is real but modest — **+1.9 to +6.8 points**. The face
+modality is much the weaker of the two (33% macro-F1 cross-dataset
+against text's 60%), and fusing a weak signal with a strong one cannot
+produce a large jump. What it does produce is complementarity: the face
+is wrong about different things than the text is, and per-class
+reliability weighting lets each lead where it is stronger. As the text
+drifts away from what the face shows, the gain over text-only *grows*,
+because the face becomes the only signal still describing the present.
 
-## Inaccurate Predictions
+That is also why the conflict flag and the recency decay matter — they
+are what stop a stale or contradictory message being treated as current
+evidence.
 
-Incorrect predictions can occur because of:
+---
 
-- Poor lighting
-- Face angle
-- Facial occlusion
-- Camera quality
-- Weak facial expressions
-- Similar-looking emotions
-- Dataset limitations
-- Class imbalance
-- Differences between training images and real-world webcam images
+## Interface
 
-For better results:
+Served at `http://localhost:8000/` — one page, no build step.
 
-- Face the camera directly
-- Use sufficient lighting
-- Keep the face reasonably close to the camera
-- Avoid covering the face
-- Avoid extreme head angles
-- Make a clear facial expression
+| Panel | What it tells you |
+|---|---|
+| **Fused Emotion** | The combined answer, its confidence, and which modalities produced it |
+| **Modality Contribution** | Face/text split bar plus every factor that set those weights |
+| **Text Channel** | Chat log; each message carries its own emotion chip |
+| **Face / Text Modality** | Each modality's full seven-class distribution |
+| **Conflict banner** | When the modalities name different emotions *and* their distributions genuinely do not overlap |
 
-The model should be evaluated using test-set metrics rather than relying only on individual webcam predictions.
+The contribution breakdown is the point: a weight is only useful if you
+can see why it was assigned. Blur the camera and the face weight drops
+with `sharpness` named as the culprit; leave a message alone for a
+minute and watch its influence decay.
 
-## Training vs. Deployment
+---
 
-**Training** (performed separately)
-```
-Facial Emotion Dataset → Data Preprocessing → ViT Fine-Tuning → Fine-Tuned ViT Model → Model Evaluation
-```
-
-**Deployment**
-```
-Fine-Tuned ViT → ONNX Export → ONNX Model → ONNX Runtime → Webcam → Real-Time Emotion Detection
-```
-
-The original training dataset is **not** required to run this deployment project.
-
-## Multimodal Project Integration
-
-This ViT V2 model is the **visual emotion detection** component of a larger multimodal emotion recognition system:
-
-```
-                    Multimodal System
-                           |
-          +----------------+----------------+
-          |                |                |
-        Image            Audio            Text
-          |                |                |
-       ViT V2          Audio Model       Text Model
-          |                |                |
-   Visual Emotion     Audio Emotion     Text Emotion
-          |                |                |
-          +----------------+----------------+
-                           |
-                     Fusion Module
-                           |
-                     Final Emotion
-```
-
-The ViT V2 ONNX model acts as the **visual emotion detection module**.
-
-The **text emotion detection module** lives in
-[`text-emotion-module/`](text-emotion-module/README.md). It fine-tunes and
-compares three compact transformers — TinyBERT, DistilBERT and MobileBERT — on
-the MTEB EmotionClassification dataset, and exposes the same kind of
-label-plus-confidence output that this ViT module produces, so the fusion stage
-can consume both.
-
-## Development Workflow
-
-1. Clone the repository
-2. Open the `vit-emotion-v2-deployment` folder
-3. Create a virtual environment
-4. Activate the virtual environment
-5. Install the required dependencies
-6. Verify the ONNX model files
-7. Run `realtime_inference_onnx.py`
-8. Test the webcam
-9. Modify the code if required
-10. Test again before committing changes
-
-## Git Workflow
+## Tests
 
 ```bash
-git status
-git add .
-git commit -m "Update ViT V2 ONNX deployment"
-git push origin main
+cd vit-emotion-v2-deployment && python test_deployment.py    # 38 tests
+cd text-emotion-module      && python test_text_module.py    # 33 tests
 ```
 
-## Important for Contributors
+Covering alignment geometry (roll removal, scale invariance), quality
+scoring, temporal smoothing, the fusion pool's invariants and
+degradation paths, the Ekman mapping, and calibration.
 
-Do **not** upload:
+Reproduce the tables:
 
-- Training datasets
-- Kaggle temporary files
-- Python virtual environments
-- `__pycache__` folders
-- Personal videos
-- Personal images
-- Temporary model checkpoints
+```bash
+cd vit-emotion-v2-deployment
+python prepare_eval_data.py              # builds the controlled eval set
+python eval_face.py --data eval_data/webcam
+python eval_fusion.py
+```
 
-The deployment folder should contain only the files required to run the ONNX inference application.
+---
 
-## Current Deployment Files
+## Limitations
 
-| File                        | Purpose                          |
-|-----------------------------|-----------------------------------|
-| `emotion_config.json`       | Emotion labels/configuration      |
-| `realtime_inference_onnx.py`| Main real-time inference program  |
-| `vit-emotion-v2.onnx`       | Main ONNX model                   |
-| `vit-emotion-v2.onnx.data`  | Additional ONNX model data        |
-| `README.md`                 | Project documentation             |
+* **The face model is the bottleneck.** Inference-time fixes recover
+  part of the real-world gap; closing it properly means retraining on
+  better labels.
+* **The fusion evaluation uses synthetic pairing.** It characterises
+  the fusion rule; it is not a multimodal benchmark, and none is
+  possible with the data this project has.
+* **Text evidence is one message**, not a conversation. The newest
+  replaces the previous, because the question is "what is the user
+  feeling now".
+* **One face at a time** — the largest in frame.
+* An audio modality is sketched in the original design but not built.
+* Emotion recognition from appearance estimates *expression*, not what
+  a person is actually feeling. Confidence scores should not be read as
+  certainty about someone's internal state.
+
+---
+
+## License
+
+See [LICENSE](LICENSE).

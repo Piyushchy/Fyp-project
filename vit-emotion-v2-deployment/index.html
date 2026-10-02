@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Real-time facial emotion recognition dashboard powered by a Vision Transformer model." />
-  <title>EmotionVision — Real-Time Emotion Recognition</title>
+  <meta name="description" content="Real-time multimodal emotion recognition: a Vision Transformer reads the face, a compact transformer reads the text, and a reliability-weighted pool fuses them." />
+  <title>EmotionVision — Multimodal Emotion Recognition</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -16,7 +16,6 @@
       --bg-primary: #0a0a0f;
       --bg-secondary: #12121a;
       --bg-card: rgba(255, 255, 255, 0.04);
-      --bg-card-hover: rgba(255, 255, 255, 0.07);
       --border-subtle: rgba(255, 255, 255, 0.08);
       --border-glow: rgba(255, 255, 255, 0.12);
 
@@ -30,7 +29,9 @@
       --accent-green: #34d399;
       --accent-red: #f87171;
       --accent-amber: #fbbf24;
-      --accent-pink: #f472b6;
+
+      --face-color: #22d3ee;
+      --text-color: #a78bfa;
 
       --glass-bg: rgba(18, 18, 26, 0.65);
       --glass-border: rgba(255, 255, 255, 0.1);
@@ -39,7 +40,6 @@
       --radius-sm: 8px;
       --radius-md: 14px;
       --radius-lg: 20px;
-      --radius-xl: 28px;
 
       --shadow-glow: 0 0 60px rgba(108, 138, 255, 0.08);
       --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.4);
@@ -55,11 +55,7 @@
     /* ============================================================
        RESET & BASE
        ============================================================ */
-    *, *::before, *::after {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     html { font-size: 16px; }
 
@@ -73,7 +69,6 @@
       -moz-osx-font-smoothing: grayscale;
     }
 
-    /* Ambient background glow */
     body::before {
       content: '';
       position: fixed;
@@ -96,12 +91,12 @@
       min-height: 100vh;
     }
 
-    /* --- Header --- */
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 20px 32px;
+      gap: 16px;
+      padding: 16px 28px;
       border-bottom: 1px solid var(--border-subtle);
       backdrop-filter: blur(var(--glass-blur));
       -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -109,67 +104,73 @@
       position: sticky;
       top: 0;
       z-index: 100;
+      flex-wrap: wrap;
     }
 
-    .header-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    .header-brand { display: flex; align-items: center; gap: 12px; }
 
     .header-brand .logo-icon {
-      width: 36px;
-      height: 36px;
+      width: 36px; height: 36px;
       background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
       border-radius: var(--radius-sm);
-      display: grid;
-      place-items: center;
+      display: grid; place-items: center;
       font-size: 18px;
       box-shadow: 0 0 20px rgba(108, 138, 255, 0.3);
     }
 
     .header-brand h1 {
-      font-size: 1.25rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
+      font-size: 1.2rem; font-weight: 700; letter-spacing: -0.02em;
       background: linear-gradient(135deg, var(--text-primary), var(--accent-blue));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
 
     .header-brand .subtitle {
-      font-size: 0.7rem;
-      color: var(--text-muted);
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
+      font-size: 0.68rem; color: var(--text-muted); font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.08em;
     }
 
-    .header-controls {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    .header-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-    /* --- Main content --- */
+    /* Capability chips — what the server actually loaded */
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px; border-radius: 100px;
+      font-size: 0.66rem; font-weight: 600;
+      letter-spacing: 0.03em;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .chip.good   { color: var(--accent-green); border-color: rgba(52,211,153,.22); background: rgba(52,211,153,.08); }
+    .chip.warn   { color: var(--accent-amber); border-color: rgba(251,191,36,.22); background: rgba(251,191,36,.08); }
+    .chip.off    { color: var(--text-muted); }
+
     .main-content {
       display: grid;
-      grid-template-columns: 1fr 360px;
-      gap: 24px;
-      padding: 24px 32px;
+      grid-template-columns: minmax(0, 1fr) 350px 330px;
+      gap: 18px;
+      padding: 20px 28px;
       flex: 1;
+      align-items: start;
     }
 
-    @media (max-width: 1024px) {
+    @media (max-width: 1500px) {
       .main-content {
-        grid-template-columns: 1fr;
-        padding: 16px;
+        grid-template-columns: minmax(0, 1fr) 330px;
       }
+      .stats-panel { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; align-items: start; }
+    }
+
+    @media (max-width: 1000px) {
+      .main-content { grid-template-columns: 1fr; padding: 14px; }
+      .chat-panel { height: 460px; }
+      .stats-panel { grid-column: auto; }
     }
 
     /* ============================================================
-       GLASS CARD COMPONENT
+       CARDS
        ============================================================ */
     .glass-card {
       background: var(--bg-card);
@@ -181,107 +182,74 @@
       overflow: hidden;
       transition: border-color var(--transition-smooth);
     }
-
-    .glass-card:hover {
-      border-color: var(--border-glow);
-    }
+    .glass-card:hover { border-color: var(--border-glow); }
 
     .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 18px 22px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px;
+      padding: 14px 18px;
       border-bottom: 1px solid var(--border-subtle);
     }
 
     .card-header h2 {
-      font-size: 0.85rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+      font-size: 0.78rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
       color: var(--text-secondary);
+      white-space: nowrap;
     }
 
-    .card-body {
-      padding: 22px;
+    .card-header .header-note {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      color: var(--text-muted);
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
     }
+
+    .card-body { padding: 18px; }
 
     /* ============================================================
-       VIDEO VIEWPORT
+       VIDEO
        ============================================================ */
-    .video-section {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
+    .video-section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
     .video-viewport {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 4 / 3;
-      border-radius: var(--radius-lg);
-      overflow: hidden;
+      position: relative; width: 100%; aspect-ratio: 4 / 3;
+      border-radius: var(--radius-lg); overflow: hidden;
       background: var(--bg-secondary);
       border: 1px solid var(--border-subtle);
       box-shadow: var(--shadow-glow);
     }
 
     .video-viewport video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-      transform: scaleX(-1);     /* mirror */
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      transform: scaleX(-1);
     }
 
     .video-viewport .overlay-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      transform: scaleX(-1);     /* mirror to match */
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; transform: scaleX(-1);
     }
 
-    /* Status badge floated on video */
     .video-status-badge {
-      position: absolute;
-      top: 16px;
-      left: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
-      border-radius: 100px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      position: absolute; top: 14px; left: 14px;
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 14px; border-radius: 100px;
+      font-size: 0.72rem; font-weight: 600;
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
       border: 1px solid var(--glass-border);
       transition: all var(--transition-smooth);
       z-index: 10;
     }
-
-    .video-status-badge.no-face {
-      background: rgba(248, 113, 113, 0.15);
-      color: var(--accent-red);
-      border-color: rgba(248, 113, 113, 0.2);
-    }
-
-    .video-status-badge.face-detected {
-      background: rgba(52, 211, 153, 0.15);
-      color: var(--accent-green);
-      border-color: rgba(52, 211, 153, 0.2);
-    }
+    .video-status-badge.no-face { background: rgba(248,113,113,.15); color: var(--accent-red); border-color: rgba(248,113,113,.2); }
+    .video-status-badge.face-detected { background: rgba(52,211,153,.15); color: var(--accent-green); border-color: rgba(52,211,153,.2); }
 
     .video-status-badge .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: currentColor;
-      animation: pulse-dot 2s ease-in-out infinite;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: currentColor; animation: pulse-dot 2s ease-in-out infinite;
     }
 
     @keyframes pulse-dot {
@@ -289,337 +257,170 @@
       50% { opacity: 0.5; transform: scale(0.85); }
     }
 
-    /* FPS badge on video */
     .video-fps-badge {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      padding: 6px 14px;
-      border-radius: 100px;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      font-weight: 500;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      background: rgba(0, 0, 0, 0.5);
-      border: 1px solid var(--glass-border);
-      color: var(--accent-cyan);
-      z-index: 10;
+      position: absolute; top: 14px; right: 14px;
+      padding: 6px 12px; border-radius: 100px;
+      font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500;
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      background: rgba(0,0,0,.5); border: 1px solid var(--glass-border);
+      color: var(--accent-cyan); z-index: 10;
     }
 
-    /* Emotion label on video */
     .video-emotion-label {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%) translateY(0);
-      padding: 10px 28px;
-      border-radius: 100px;
-      font-size: 1rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      background: rgba(0, 0, 0, 0.55);
-      border: 1px solid var(--glass-border);
-      color: var(--text-primary);
-      z-index: 10;
-      transition: all var(--transition-spring);
-      white-space: nowrap;
+      position: absolute; bottom: 18px; left: 50%;
+      transform: translateX(-50%);
+      padding: 9px 24px; border-radius: 100px;
+      font-size: 0.95rem; font-weight: 700;
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      background: rgba(0,0,0,.55); border: 1px solid var(--glass-border);
+      color: var(--text-primary); z-index: 10;
+      transition: all var(--transition-spring); white-space: nowrap;
     }
+    .video-emotion-label .emoji { margin-right: 8px; }
 
-    .video-emotion-label .emoji {
-      margin-right: 8px;
-    }
-
-    /* Placeholder state */
     .video-placeholder {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      color: var(--text-muted);
-      z-index: 5;
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; color: var(--text-muted); z-index: 5;
     }
-
     .video-placeholder .placeholder-icon {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      background: var(--bg-card);
-      border: 2px dashed var(--border-subtle);
-      display: grid;
-      place-items: center;
-      font-size: 28px;
+      width: 60px; height: 60px; border-radius: 50%;
+      background: var(--bg-card); border: 2px dashed var(--border-subtle);
+      display: grid; place-items: center; font-size: 26px;
     }
-
-    .video-placeholder p {
-      font-size: 0.85rem;
-      font-weight: 500;
-    }
-
+    .video-placeholder p { font-size: 0.85rem; font-weight: 500; }
     .video-placeholder.hidden { display: none; }
 
     /* ============================================================
-       BUTTONS
+       BUTTONS & INPUTS
        ============================================================ */
     .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 22px;
-      border-radius: 100px;
-      font-family: var(--font-sans);
-      font-size: 0.8rem;
-      font-weight: 600;
-      border: none;
-      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 20px; border-radius: 100px;
+      font-family: var(--font-sans); font-size: 0.78rem; font-weight: 600;
+      border: none; cursor: pointer; outline: none;
       transition: all var(--transition-smooth);
-      letter-spacing: 0.01em;
-      outline: none;
     }
-
     .btn:active { transform: scale(0.97); }
 
     .btn-primary {
       background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-      color: #fff;
-      box-shadow: 0 4px 20px rgba(108, 138, 255, 0.25);
+      color: #fff; box-shadow: 0 4px 20px rgba(108,138,255,.25);
     }
-    .btn-primary:hover {
-      box-shadow: 0 6px 28px rgba(108, 138, 255, 0.4);
-      transform: translateY(-1px);
-    }
-    .btn-primary:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
+    .btn-primary:hover:not(:disabled) { box-shadow: 0 6px 28px rgba(108,138,255,.4); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
 
     .btn-danger {
-      background: rgba(248, 113, 113, 0.15);
-      color: var(--accent-red);
-      border: 1px solid rgba(248, 113, 113, 0.2);
+      background: rgba(248,113,113,.15); color: var(--accent-red);
+      border: 1px solid rgba(248,113,113,.2);
     }
-    .btn-danger:hover {
-      background: rgba(248, 113, 113, 0.25);
-    }
+    .btn-danger:hover:not(:disabled) { background: rgba(248,113,113,.25); }
+    .btn-danger:disabled { opacity: .4; cursor: not-allowed; }
 
     /* ============================================================
-       STATS PANEL (right sidebar)
+       FUSED EMOTION (primary readout)
        ============================================================ */
-    .stats-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
+    .fused-card { border-color: rgba(108,138,255,.2); }
+
+    .fused-display {
+      display: flex; align-items: center; gap: 16px;
     }
 
-    /* --- Connection status --- */
-    .connection-status {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 18px;
-      border-radius: var(--radius-md);
-      font-size: 0.8rem;
-      font-weight: 600;
-      transition: all var(--transition-smooth);
-    }
-
-    .connection-status.connected {
-      background: rgba(52, 211, 153, 0.08);
-      border: 1px solid rgba(52, 211, 153, 0.15);
-      color: var(--accent-green);
-    }
-
-    .connection-status.disconnected {
-      background: rgba(248, 113, 113, 0.08);
-      border: 1px solid rgba(248, 113, 113, 0.15);
-      color: var(--accent-red);
-    }
-
-    .connection-status.reconnecting {
-      background: rgba(251, 191, 36, 0.08);
-      border: 1px solid rgba(251, 191, 36, 0.15);
-      color: var(--accent-amber);
-    }
-
-    .connection-status .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: currentColor;
-      flex-shrink: 0;
-    }
-
-    .connection-status.connected .status-dot {
-      animation: pulse-dot 2s ease-in-out infinite;
-    }
-
-    .connection-status.reconnecting .status-dot {
-      animation: pulse-dot 0.8s ease-in-out infinite;
-    }
-
-    /* --- Stat item --- */
-    .stat-item {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .stat-item .stat-label {
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-muted);
-    }
-
-    .stat-item .stat-value {
-      font-family: var(--font-mono);
-      font-size: 1.6rem;
-      font-weight: 700;
-      color: var(--text-primary);
-      line-height: 1;
-    }
-
-    .stat-item .stat-unit {
-      font-size: 0.7rem;
-      color: var(--text-secondary);
-      font-weight: 500;
-    }
-
-    /* --- Stat grid (2-col) --- */
-    .stat-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-
-    /* --- Emotion badge --- */
-    .emotion-display {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      padding: 8px 0;
-    }
-
-    .emotion-emoji {
-      font-size: 3rem;
-      line-height: 1;
+    .fused-emoji {
+      font-size: 3.1rem; line-height: 1;
       transition: transform var(--transition-spring);
+      flex-shrink: 0;
+    }
+    .fused-emoji.pop { transform: scale(1.18); }
+
+    .fused-text { flex: 1; min-width: 0; }
+
+    .fused-name {
+      font-size: 1.45rem; font-weight: 800;
+      text-transform: capitalize; letter-spacing: -0.01em;
+      line-height: 1.1;
     }
 
-    .emotion-emoji.pop {
-      transform: scale(1.15);
+    .fused-mode {
+      font-size: 0.66rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--text-muted); margin-top: 3px;
     }
 
-    .emotion-name {
-      font-size: 1.1rem;
-      font-weight: 700;
-      text-transform: capitalize;
-      letter-spacing: 0.02em;
+    .conflict-banner {
+      display: none;
+      align-items: flex-start; gap: 9px;
+      margin-top: 14px; padding: 11px 13px;
+      border-radius: var(--radius-md);
+      background: rgba(251,191,36,.09);
+      border: 1px solid rgba(251,191,36,.22);
+      color: var(--accent-amber);
+      font-size: 0.72rem; line-height: 1.45;
     }
+    .conflict-banner.visible { display: flex; }
+    .conflict-banner .icon { flex-shrink: 0; }
 
-    /* --- Confidence bar --- */
-    .confidence-bar-wrapper {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
+    /* ============================================================
+       BARS
+       ============================================================ */
+    .bar-wrapper { width: 100%; display: flex; flex-direction: column; gap: 6px; }
 
-    .confidence-bar-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-    }
+    .bar-header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 
-    .confidence-bar-header .label {
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+    .bar-header .label {
+      font-size: 0.68rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
       color: var(--text-muted);
     }
 
-    .confidence-bar-header .value {
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      font-weight: 600;
+    .bar-header .value {
+      font-family: var(--font-mono); font-size: 0.76rem; font-weight: 600;
       color: var(--text-primary);
     }
 
-    .confidence-bar-track {
-      width: 100%;
-      height: 8px;
-      background: var(--bg-secondary);
-      border-radius: 100px;
-      overflow: hidden;
+    .bar-track {
+      width: 100%; height: 8px;
+      background: var(--bg-secondary); border-radius: 100px; overflow: hidden;
     }
 
-    .confidence-bar-fill {
-      height: 100%;
-      border-radius: 100px;
+    .bar-fill {
+      height: 100%; border-radius: 100px;
       background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
-      transition: width var(--transition-smooth);
-      min-width: 0;
+      transition: width var(--transition-smooth); min-width: 0;
     }
 
-    /* --- Emotion history sparkline --- */
-    .emotion-history {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
+    /* Per-emotion distribution rows */
+    .dist-list { display: flex; flex-direction: column; gap: 8px; }
 
-    .emotion-history-bar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .dist-row { display: flex; align-items: center; gap: 9px; }
 
-    .emotion-history-bar .eh-label {
-      width: 70px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: capitalize;
-      color: var(--text-secondary);
+    .dist-row .dr-label {
+      width: 62px; flex-shrink: 0;
+      font-size: 0.68rem; font-weight: 600;
+      text-transform: capitalize; color: var(--text-secondary);
       text-align: right;
-      flex-shrink: 0;
     }
 
-    .emotion-history-bar .eh-track {
-      flex: 1;
-      height: 6px;
-      background: var(--bg-secondary);
-      border-radius: 100px;
-      overflow: hidden;
+    .dist-row .dr-track {
+      flex: 1; height: 6px;
+      background: var(--bg-secondary); border-radius: 100px; overflow: hidden;
     }
 
-    .emotion-history-bar .eh-fill {
-      height: 100%;
-      border-radius: 100px;
-      transition: width var(--transition-smooth);
-      min-width: 0;
+    .dist-row .dr-fill {
+      height: 100%; border-radius: 100px;
+      background: var(--emo-color, var(--accent-blue));
+      transition: width var(--transition-smooth); min-width: 0;
     }
 
-    .emotion-history-bar .eh-value {
-      width: 42px;
-      font-family: var(--font-mono);
-      font-size: 0.65rem;
-      font-weight: 500;
-      color: var(--text-muted);
-      text-align: right;
-      flex-shrink: 0;
+    .dist-row .dr-value {
+      width: 38px; flex-shrink: 0;
+      font-family: var(--font-mono); font-size: 0.63rem; font-weight: 500;
+      color: var(--text-muted); text-align: right;
     }
 
-    /* Emotion-specific colours */
+    .dist-row.leading .dr-label { color: var(--text-primary); }
+    .dist-row.leading .dr-value { color: var(--text-secondary); }
+
     .emo-angry    { --emo-color: #f87171; }
     .emo-disgust  { --emo-color: #a78bfa; }
     .emo-fear     { --emo-color: #c084fc; }
@@ -628,40 +429,288 @@
     .emo-sad      { --emo-color: #60a5fa; }
     .emo-surprise { --emo-color: #34d399; }
 
-    .emotion-history-bar .eh-fill { background: var(--emo-color); }
-
     /* ============================================================
-       HIDDEN CANVAS (offscreen capture)
+       CONTRIBUTION SPLIT BAR
        ============================================================ */
-    #captureCanvas { display: none; }
+    .split-bar {
+      display: flex; width: 100%; height: 26px;
+      border-radius: 100px; overflow: hidden;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .split-bar .seg {
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 600;
+      color: #0a0a0f;
+      transition: width var(--transition-smooth);
+      overflow: hidden; white-space: nowrap;
+      min-width: 0;
+    }
+    .split-bar .seg-face { background: var(--face-color); }
+    .split-bar .seg-text { background: var(--text-color); }
+
+    .split-legend {
+      display: flex; justify-content: space-between;
+      margin-top: 9px; font-size: 0.68rem; font-weight: 600;
+    }
+    .split-legend .lg { display: flex; align-items: center; gap: 6px; }
+    .split-legend .swatch { width: 9px; height: 9px; border-radius: 3px; }
+    .split-legend .sw-face { background: var(--face-color); }
+    .split-legend .sw-text { background: var(--text-color); }
+    .split-legend .lg-face { color: var(--face-color); }
+    .split-legend .lg-text { color: var(--text-color); }
+
+    /* Factor breakdown */
+    .factor-group { margin-top: 16px; }
+
+    .factor-group + .factor-group { margin-top: 14px; }
+
+    .factor-title {
+      font-size: 0.64rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .factor-title.face { color: var(--face-color); }
+    .factor-title.text { color: var(--text-color); }
+
+    .factor-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 3px 0;
+    }
+
+    .factor-row .fr-name {
+      width: 124px; flex-shrink: 0;
+      font-size: 0.67rem; color: var(--text-secondary);
+      text-transform: capitalize;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .factor-row .fr-track {
+      flex: 1; height: 4px;
+      background: var(--bg-secondary); border-radius: 100px; overflow: hidden;
+    }
+
+    .factor-row .fr-fill {
+      height: 100%; border-radius: 100px;
+      transition: width var(--transition-smooth);
+    }
+    .factor-row.face .fr-fill { background: var(--face-color); }
+    .factor-row.text .fr-fill { background: var(--text-color); }
+
+    .factor-row .fr-value {
+      width: 34px; flex-shrink: 0;
+      font-family: var(--font-mono); font-size: 0.62rem;
+      color: var(--text-muted); text-align: right;
+    }
+
+    .factor-row.weakest .fr-name { color: var(--accent-amber); }
+    .factor-row.weakest .fr-value { color: var(--accent-amber); }
+
+    .factor-empty {
+      font-size: 0.68rem; color: var(--text-muted);
+      font-style: italic; padding: 4px 0;
+    }
 
     /* ============================================================
-       SCROLLBAR
+       CHAT
+       ============================================================ */
+    .chat-panel {
+      display: flex; flex-direction: column;
+      height: calc(100vh - 116px);
+      min-height: 380px;
+      position: sticky; top: 92px;
+    }
+
+    @media (max-width: 1500px) { .chat-panel { position: static; height: 520px; } }
+
+    .chat-log {
+      flex: 1; overflow-y: auto;
+      padding: 16px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+
+    .chat-empty {
+      margin: auto; text-align: center;
+      color: var(--text-muted); font-size: 0.78rem;
+      line-height: 1.6; padding: 20px;
+    }
+    .chat-empty .big { font-size: 26px; display: block; margin-bottom: 10px; }
+
+    .message {
+      display: flex; flex-direction: column; gap: 7px;
+      align-self: flex-end;
+      max-width: 92%;
+      animation: fade-in-up 0.32s cubic-bezier(0.4, 0, 0.2, 1) both;
+    }
+
+    .message-bubble {
+      padding: 10px 14px;
+      border-radius: 14px 14px 4px 14px;
+      background: linear-gradient(135deg, rgba(108,138,255,.16), rgba(167,139,250,.16));
+      border: 1px solid rgba(167,139,250,.2);
+      font-size: 0.82rem; line-height: 1.5;
+      word-wrap: break-word; overflow-wrap: anywhere;
+    }
+
+    .message-meta {
+      display: flex; align-items: center; gap: 7px;
+      justify-content: flex-end; flex-wrap: wrap;
+    }
+
+    .emotion-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 9px; border-radius: 100px;
+      font-size: 0.66rem; font-weight: 700;
+      text-transform: capitalize;
+      background: color-mix(in srgb, var(--emo-color) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--emo-color) 32%, transparent);
+      color: var(--emo-color);
+    }
+
+    .message-meta .latency {
+      font-family: var(--font-mono); font-size: 0.6rem; color: var(--text-muted);
+    }
+
+    .message.pending .message-bubble { opacity: 0.55; }
+    .message.pending .message-meta::after {
+      content: 'analysing…';
+      font-size: 0.62rem; color: var(--text-muted); font-style: italic;
+    }
+
+    .message.failed .message-bubble {
+      border-color: rgba(248,113,113,.3);
+      background: rgba(248,113,113,.08);
+    }
+
+    .chat-input-row {
+      display: flex; gap: 9px; padding: 14px;
+      border-top: 1px solid var(--border-subtle);
+      align-items: flex-end;
+    }
+
+    .chat-input {
+      flex: 1; resize: none;
+      font-family: var(--font-sans); font-size: 0.82rem; line-height: 1.45;
+      padding: 10px 13px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      outline: none;
+      max-height: 110px;
+      transition: border-color var(--transition-fast);
+    }
+    .chat-input:focus { border-color: rgba(108,138,255,.45); }
+    .chat-input::placeholder { color: var(--text-muted); }
+    .chat-input:disabled { opacity: .5; cursor: not-allowed; }
+
+    .btn-send {
+      width: 40px; height: 40px; flex-shrink: 0;
+      border-radius: 50%; border: none; cursor: pointer;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      color: #fff; font-size: 15px;
+      display: grid; place-items: center;
+      transition: all var(--transition-smooth);
+    }
+    .btn-send:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(108,138,255,.35); }
+    .btn-send:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* ============================================================
+       TEXT EVIDENCE / DECAY
+       ============================================================ */
+    .evidence-quote {
+      font-size: 0.75rem; line-height: 1.5;
+      color: var(--text-secondary);
+      padding: 9px 12px; margin-bottom: 12px;
+      border-left: 2px solid var(--text-color);
+      background: rgba(167,139,250,.06);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      word-wrap: break-word; overflow-wrap: anywhere;
+    }
+
+    .decay-row {
+      display: flex; align-items: center; gap: 9px;
+      margin-bottom: 12px;
+    }
+    .decay-row .dl {
+      font-size: 0.66rem; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .06em; font-weight: 600;
+      width: 62px; flex-shrink: 0; text-align: right;
+    }
+    .decay-row .dt {
+      flex: 1; height: 5px; border-radius: 100px;
+      background: var(--bg-secondary); overflow: hidden;
+    }
+    .decay-row .df {
+      height: 100%; border-radius: 100px; background: var(--text-color);
+      transition: width var(--transition-smooth);
+    }
+    .decay-row .dv {
+      font-family: var(--font-mono); font-size: 0.62rem; color: var(--text-muted);
+      width: 46px; text-align: right; flex-shrink: 0;
+    }
+
+    /* ============================================================
+       CONNECTION / STATS
+       ============================================================ */
+    .stats-panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+    .connection-status {
+      display: flex; align-items: center; gap: 9px;
+      padding: 12px 16px; border-radius: var(--radius-md);
+      font-size: 0.76rem; font-weight: 600;
+      transition: all var(--transition-smooth);
+    }
+    .connection-status.connected { background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.15); color: var(--accent-green); }
+    .connection-status.disconnected { background: rgba(248,113,113,.08); border: 1px solid rgba(248,113,113,.15); color: var(--accent-red); }
+    .connection-status.reconnecting { background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.15); color: var(--accent-amber); }
+
+    .connection-status .status-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: currentColor; flex-shrink: 0;
+    }
+    .connection-status.connected .status-dot { animation: pulse-dot 2s ease-in-out infinite; }
+    .connection-status.reconnecting .status-dot { animation: pulse-dot .8s ease-in-out infinite; }
+
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    .stat-item { display: flex; flex-direction: column; gap: 5px; }
+    .stat-item .stat-label {
+      font-size: 0.64rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted);
+    }
+    .stat-item .stat-value {
+      font-family: var(--font-mono); font-size: 1.25rem; font-weight: 700;
+      color: var(--text-primary); line-height: 1;
+    }
+
+    .muted-note {
+      font-size: 0.68rem; color: var(--text-muted);
+      line-height: 1.5; margin-top: 10px;
+    }
+
+    /* ============================================================
+       SCROLLBAR & ANIMATION
        ============================================================ */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb {
-      background: var(--border-subtle);
-      border-radius: 100px;
-    }
+    ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 100px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-glow); }
 
-    /* ============================================================
-       ANIMATIONS
-       ============================================================ */
     @keyframes fade-in-up {
-      from { opacity: 0; transform: translateY(12px); }
+      from { opacity: 0; transform: translateY(10px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    .animate-in {
-      animation: fade-in-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
-    }
-
-    .delay-1 { animation-delay: 0.05s; }
-    .delay-2 { animation-delay: 0.10s; }
-    .delay-3 { animation-delay: 0.15s; }
-    .delay-4 { animation-delay: 0.20s; }
-    .delay-5 { animation-delay: 0.25s; }
+    .animate-in { animation: fade-in-up .5s cubic-bezier(0.4, 0, 0.2, 1) both; }
+    .delay-1 { animation-delay: .05s; }
+    .delay-2 { animation-delay: .10s; }
+    .delay-3 { animation-delay: .15s; }
+    .delay-4 { animation-delay: .20s; }
+    .delay-5 { animation-delay: .25s; }
+    .delay-6 { animation-delay: .30s; }
   </style>
 </head>
 
@@ -673,25 +722,25 @@
         <div class="logo-icon">🧠</div>
         <div>
           <h1>EmotionVision</h1>
-          <span class="subtitle">Real-Time ViT Inference</span>
+          <span class="subtitle">Multimodal · Face + Text</span>
         </div>
       </div>
+
       <div class="header-controls">
-        <button class="btn btn-danger" id="btnStop" disabled>
-          ⏹ Stop
-        </button>
-        <button class="btn btn-primary" id="btnStart">
-          ▶ Start Session
-        </button>
+        <span class="chip off" id="chipDetector">detector —</span>
+        <span class="chip off" id="chipDevice">device —</span>
+        <span class="chip off" id="chipText">text —</span>
+        <button class="btn btn-danger" id="btnStop" disabled>⏹ Stop</button>
+        <button class="btn btn-primary" id="btnStart">▶ Start Session</button>
       </div>
     </header>
 
     <!-- ====== MAIN ====== -->
     <main class="main-content">
-      <!-- --- Video Column --- -->
+
+      <!-- ---------- VIDEO COLUMN ---------- -->
       <section class="video-section animate-in delay-1">
         <div class="video-viewport" id="videoViewport">
-          <!-- Placeholder shown before webcam starts -->
           <div class="video-placeholder" id="videoPlaceholder">
             <div class="placeholder-icon">📷</div>
             <p>Click <strong>Start Session</strong> to begin</p>
@@ -712,187 +761,383 @@
             <span id="emotionLabelText"></span>
           </div>
         </div>
+
+        <!-- Fused result -->
+        <div class="glass-card fused-card animate-in delay-2">
+          <div class="card-header">
+            <h2>Fused Emotion</h2>
+            <span class="header-note" id="fusedModeNote">—</span>
+          </div>
+          <div class="card-body">
+            <div class="fused-display">
+              <div class="fused-emoji" id="fusedEmoji">🔍</div>
+              <div class="fused-text">
+                <div class="fused-name" id="fusedName">Waiting…</div>
+                <div class="fused-mode" id="fusedSub">no evidence yet</div>
+              </div>
+            </div>
+
+            <div class="bar-wrapper" style="margin-top:14px;">
+              <div class="bar-header">
+                <span class="label">Fused Confidence</span>
+                <span class="value" id="fusedConfValue">0%</span>
+              </div>
+              <div class="bar-track"><div class="bar-fill" id="fusedConfBar" style="width:0%"></div></div>
+            </div>
+
+            <div class="conflict-banner" id="conflictBanner">
+              <span class="icon">⚠️</span>
+              <span id="conflictText"></span>
+            </div>
+
+            <div class="dist-list" id="fusedDist" style="margin-top:16px;"></div>
+          </div>
+        </div>
+
+        <!-- Modality contribution -->
+        <div class="glass-card animate-in delay-3">
+          <div class="card-header">
+            <h2>Modality Contribution</h2>
+            <span class="header-note" id="agreementNote">—</span>
+          </div>
+          <div class="card-body">
+            <div class="split-bar">
+              <div class="seg seg-face" id="segFace" style="width:50%">face</div>
+              <div class="seg seg-text" id="segText" style="width:50%">text</div>
+            </div>
+            <div class="split-legend">
+              <span class="lg lg-face"><span class="swatch sw-face"></span>Face <span id="legendFace">—</span></span>
+              <span class="lg lg-text"><span class="swatch sw-text"></span>Text <span id="legendText">—</span></span>
+            </div>
+
+            <div class="factor-group">
+              <div class="factor-title face">Face weight factors</div>
+              <div id="faceFactors"><div class="factor-empty">No face evidence.</div></div>
+            </div>
+
+            <div class="factor-group">
+              <div class="factor-title text">Text weight factors</div>
+              <div id="textFactors"><div class="factor-empty">No message sent yet.</div></div>
+            </div>
+
+            <p class="muted-note">
+              Each modality is weighted by how much this particular observation
+              deserves to be trusted. Face weight tracks frame quality; text
+              weight decays with age and message length.
+            </p>
+          </div>
+        </div>
       </section>
 
-      <!-- --- Stats Sidebar --- -->
-      <aside class="stats-panel">
-        <!-- Connection -->
-        <div class="glass-card animate-in delay-2">
-          <div class="card-header">
-            <h2>Connection</h2>
+      <!-- ---------- CHAT COLUMN ---------- -->
+      <aside class="glass-card chat-panel animate-in delay-4">
+        <div class="card-header">
+          <h2>Text Channel</h2>
+          <span class="header-note" id="chatModelNote">—</span>
+        </div>
+
+        <div class="chat-log" id="chatLog">
+          <div class="chat-empty" id="chatEmpty">
+            <span class="big">💬</span>
+            Type how you feel and send it.<br />
+            Each message is classified into the same seven emotions as the
+            face, then fused with it.
           </div>
+        </div>
+
+        <div class="chat-input-row">
+          <textarea class="chat-input" id="chatInput" rows="1"
+                    placeholder="Type a message… (Enter to send)"></textarea>
+          <button class="btn-send" id="btnSend" title="Send">➤</button>
+        </div>
+      </aside>
+
+      <!-- ---------- STATS COLUMN ---------- -->
+      <aside class="stats-panel">
+        <div class="glass-card animate-in delay-5">
+          <div class="card-header"><h2>Connection</h2></div>
           <div class="card-body">
             <div class="connection-status disconnected" id="connStatus">
               <span class="status-dot"></span>
               <span id="connStatusText">Disconnected</span>
             </div>
-          </div>
-        </div>
-
-        <!-- Live Stats -->
-        <div class="glass-card animate-in delay-3">
-          <div class="card-header">
-            <h2>Live Stats</h2>
-          </div>
-          <div class="card-body">
-            <div class="stat-grid">
+            <div class="stat-grid" style="margin-top:14px;">
               <div class="stat-item">
                 <span class="stat-label">Backend FPS</span>
                 <span class="stat-value" id="statFps">—</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">MP Confidence</span>
-                <span class="stat-value" id="statMpConf">—</span>
+                <span class="stat-label">Face Quality</span>
+                <span class="stat-value" id="statQuality">—</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Primary Emotion -->
-        <div class="glass-card animate-in delay-4">
-          <div class="card-header">
-            <h2>Primary Emotion</h2>
-          </div>
-          <div class="card-body">
-            <div class="emotion-display">
-              <div class="emotion-emoji" id="statEmoji">🔍</div>
-              <div class="emotion-name" id="statEmotionName">Detecting…</div>
-            </div>
-
-            <div class="confidence-bar-wrapper" style="margin-top: 12px;">
-              <div class="confidence-bar-header">
-                <span class="label">ViT Confidence</span>
-                <span class="value" id="statConfValue">0%</span>
-              </div>
-              <div class="confidence-bar-track">
-                <div class="confidence-bar-fill" id="statConfBar" style="width: 0%;"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Emotion Distribution -->
+        <!-- Face modality -->
         <div class="glass-card animate-in delay-5">
           <div class="card-header">
-            <h2>Distribution</h2>
+            <h2>Face Modality</h2>
+            <span class="header-note" id="faceNote">—</span>
           </div>
-          <div class="card-body emotion-history" id="emotionDistribution">
-            <!-- built by JS -->
+          <div class="card-body">
+            <div class="dist-list" id="faceDist"></div>
+            <p class="muted-note" id="faceQualityNote">Waiting for a face…</p>
+          </div>
+        </div>
+
+        <!-- Text modality -->
+        <div class="glass-card animate-in delay-6">
+          <div class="card-header">
+            <h2>Text Modality</h2>
+            <span class="header-note" id="textNote">—</span>
+          </div>
+          <div class="card-body">
+            <div class="evidence-quote" id="textQuote" style="display:none;"></div>
+            <div class="decay-row" id="decayRow" style="display:none;">
+              <span class="dl">Influence</span>
+              <div class="dt"><div class="df" id="decayFill" style="width:0%"></div></div>
+              <span class="dv" id="decayValue">—</span>
+            </div>
+            <div class="dist-list" id="textDist"></div>
+            <p class="muted-note" id="textEmptyNote">No message sent yet.</p>
           </div>
         </div>
       </aside>
     </main>
   </div>
 
-  <!-- Offscreen capture canvas -->
-  <canvas id="captureCanvas"></canvas>
+  <canvas id="captureCanvas" style="display:none;"></canvas>
 
   <script>
     /* ==========================================================
-       CONSTANTS & STATE
+       CONSTANTS
        ========================================================== */
-    const WS_URL = 'ws://localhost:8000/ws/video';
+
+    // The page is served by the same process that runs the socket, so
+    // location.host already carries the right port. The fallback covers
+    // opening this file directly from disk, where location.host is empty.
+    const WS_URL = window.location.host
+      ? `ws://${window.location.host}/ws/video`
+      : 'ws://localhost:8000/ws/video';
+
     const JPEG_QUALITY = 0.7;
     const RECONNECT_DELAY_MS = 2000;
     const MAX_RECONNECT_ATTEMPTS = 20;
 
     const EMOTION_EMOJIS = {
-      angry:    '😠',
-      disgust:  '🤢',
-      fear:     '😨',
-      happy:    '😊',
-      neutral:  '😐',
-      sad:      '😢',
-      surprise: '😲',
+      angry: '😠', disgust: '🤢', fear: '😨', happy: '😊',
+      neutral: '😐', sad: '😢', surprise: '😲',
     };
 
     const EMOTION_COLORS = {
-      angry:    '#f87171',
-      disgust:  '#a78bfa',
-      fear:     '#c084fc',
-      happy:    '#fbbf24',
-      neutral:  '#94a3b8',
-      sad:      '#60a5fa',
-      surprise: '#34d399',
+      angry: '#f87171', disgust: '#a78bfa', fear: '#c084fc', happy: '#fbbf24',
+      neutral: '#94a3b8', sad: '#60a5fa', surprise: '#34d399',
     };
 
-    const EMOTION_KEYS = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'];
+    // Overwritten by the server's hello message; this is only the order
+    // used to build the bars before the socket opens.
+    let EMOTION_KEYS = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'];
 
-    /** Running distribution accumulator (exponential moving average). */
-    const distribution = {};
-    EMOTION_KEYS.forEach(k => distribution[k] = 0);
-
+    /* ==========================================================
+       STATE
+       ========================================================== */
     let ws = null;
     let videoStream = null;
     let running = false;
     let reconnectAttempts = 0;
-    let awaitingResponse = false;   // frame-pacing flag
-    let animFrameId = null;
-    let prevEmotion = null;
+    let awaitingFrameAck = false;
+    let prevFusedLabel = null;
+    let messageCounter = 0;
+    let textAvailable = false;
+    const pendingMessages = new Map();
 
     /* ==========================================================
-       DOM REFS
+       DOM
        ========================================================== */
-    const $video        = document.getElementById('webcamVideo');
-    const $overlay      = document.getElementById('overlayCanvas');
-    const $capture      = document.getElementById('captureCanvas');
-    const $placeholder  = document.getElementById('videoPlaceholder');
-    const $btnStart     = document.getElementById('btnStart');
-    const $btnStop      = document.getElementById('btnStop');
-    const $faceBadge    = document.getElementById('faceBadge');
-    const $faceBadgeT   = document.getElementById('faceBadgeText');
-    const $fpsBadge     = document.getElementById('fpsBadge');
-    const $emotionLabel = document.getElementById('emotionLabel');
-    const $emotionEmoji = document.getElementById('emotionEmoji');
-    const $emotionLabelT= document.getElementById('emotionLabelText');
-    const $connStatus   = document.getElementById('connStatus');
-    const $connStatusT  = document.getElementById('connStatusText');
-    const $statFps      = document.getElementById('statFps');
-    const $statMpConf   = document.getElementById('statMpConf');
-    const $statEmoji    = document.getElementById('statEmoji');
-    const $statEmoName  = document.getElementById('statEmotionName');
-    const $statConfVal  = document.getElementById('statConfValue');
-    const $statConfBar  = document.getElementById('statConfBar');
-    const $distPanel    = document.getElementById('emotionDistribution');
+    const $ = (id) => document.getElementById(id);
+
+    const $video = $('webcamVideo');
+    const $overlay = $('overlayCanvas');
+    const $capture = $('captureCanvas');
+    const $placeholder = $('videoPlaceholder');
+    const $btnStart = $('btnStart');
+    const $btnStop = $('btnStop');
+    const $faceBadge = $('faceBadge');
+    const $faceBadgeT = $('faceBadgeText');
+    const $fpsBadge = $('fpsBadge');
+    const $emotionLabel = $('emotionLabel');
+    const $emotionEmoji = $('emotionEmoji');
+    const $emotionLabelT = $('emotionLabelText');
+
+    const $connStatus = $('connStatus');
+    const $connStatusT = $('connStatusText');
+    const $statFps = $('statFps');
+    const $statQuality = $('statQuality');
+
+    const $fusedEmoji = $('fusedEmoji');
+    const $fusedName = $('fusedName');
+    const $fusedSub = $('fusedSub');
+    const $fusedModeNote = $('fusedModeNote');
+    const $fusedConfValue = $('fusedConfValue');
+    const $fusedConfBar = $('fusedConfBar');
+    const $fusedDist = $('fusedDist');
+    const $conflictBanner = $('conflictBanner');
+    const $conflictText = $('conflictText');
+
+    const $segFace = $('segFace');
+    const $segText = $('segText');
+    const $legendFace = $('legendFace');
+    const $legendText = $('legendText');
+    const $faceFactors = $('faceFactors');
+    const $textFactors = $('textFactors');
+    const $agreementNote = $('agreementNote');
+
+    const $faceDist = $('faceDist');
+    const $faceNote = $('faceNote');
+    const $faceQualityNote = $('faceQualityNote');
+
+    const $textDist = $('textDist');
+    const $textNote = $('textNote');
+    const $textQuote = $('textQuote');
+    const $textEmptyNote = $('textEmptyNote');
+    const $decayRow = $('decayRow');
+    const $decayFill = $('decayFill');
+    const $decayValue = $('decayValue');
+
+    const $chatLog = $('chatLog');
+    const $chatEmpty = $('chatEmpty');
+    const $chatInput = $('chatInput');
+    const $btnSend = $('btnSend');
+    const $chatModelNote = $('chatModelNote');
+    const $chipDetector = $('chipDetector');
+    const $chipDevice = $('chipDevice');
+    const $chipText = $('chipText');
 
     /* ==========================================================
-       BUILD DISTRIBUTION BARS
+       DISTRIBUTION LISTS
        ========================================================== */
-    function buildDistributionPanel() {
-      $distPanel.innerHTML = '';
-      EMOTION_KEYS.forEach(emo => {
+    function buildDistList(container) {
+      container.innerHTML = '';
+      EMOTION_KEYS.forEach((emo) => {
         const row = document.createElement('div');
-        row.className = `emotion-history-bar emo-${emo}`;
-        row.innerHTML = `
-          <span class="eh-label">${emo}</span>
-          <div class="eh-track"><div class="eh-fill" id="dist-${emo}" style="width:0%"></div></div>
-          <span class="eh-value" id="distv-${emo}">0%</span>`;
-        $distPanel.appendChild(row);
+        row.className = `dist-row emo-${emo}`;
+        row.dataset.emo = emo;
+        row.innerHTML =
+          `<span class="dr-label">${emo}</span>` +
+          `<div class="dr-track"><div class="dr-fill" style="width:0%"></div></div>` +
+          `<span class="dr-value">0%</span>`;
+        container.appendChild(row);
       });
     }
-    buildDistributionPanel();
+
+    /** Render a {label: probability} map into a prepared list. */
+    function renderDist(container, probs) {
+      if (!probs) {
+        container.querySelectorAll('.dist-row').forEach((row) => {
+          row.querySelector('.dr-fill').style.width = '0%';
+          row.querySelector('.dr-value').textContent = '—';
+          row.classList.remove('leading');
+        });
+        return;
+      }
+
+      let leader = null;
+      let best = -1;
+      EMOTION_KEYS.forEach((emo) => {
+        const value = probs[emo] ?? 0;
+        if (value > best) { best = value; leader = emo; }
+      });
+
+      container.querySelectorAll('.dist-row').forEach((row) => {
+        const emo = row.dataset.emo;
+        const value = probs[emo] ?? 0;
+        row.querySelector('.dr-fill').style.width = (value * 100).toFixed(1) + '%';
+        row.querySelector('.dr-value').textContent = (value * 100).toFixed(0) + '%';
+        row.classList.toggle('leading', emo === leader);
+      });
+    }
+
+    [$fusedDist, $faceDist, $textDist].forEach(buildDistList);
+
+    /* ==========================================================
+       FACTOR ROWS
+       ========================================================== */
+
+    // age_seconds is deliberately absent: it is a duration, not a weight
+    // in [0,1], and it is surfaced through the decay meter instead.
+    const FACTOR_ORDER = {
+      face: ['quality', 'certainty'],
+      text: ['recency', 'informativeness', 'certainty'],
+    };
+
+    function renderFactors(container, contribution, kind, weakest) {
+      if (!contribution || !contribution.present) {
+        container.innerHTML = `<div class="factor-empty">${
+          kind === 'face' ? 'No face detected.' : 'No message sent yet.'
+        }</div>`;
+        return;
+      }
+
+      const factors = contribution.factors || {};
+      const rows = [];
+
+      FACTOR_ORDER[kind].forEach((name) => {
+        if (!(name in factors)) return;
+        const value = factors[name];
+        const isWeak = kind === 'face' && name === 'quality' && weakest;
+        const label = isWeak ? `quality · ${weakest}` : name;
+        rows.push(
+          `<div class="factor-row ${kind}${value < 0.3 ? ' weakest' : ''}">` +
+          `<span class="fr-name">${label}</span>` +
+          `<div class="fr-track"><div class="fr-fill" style="width:${(value * 100).toFixed(1)}%"></div></div>` +
+          `<span class="fr-value">${value.toFixed(2)}</span>` +
+          `</div>`
+        );
+      });
+
+      rows.push(
+        `<div class="factor-row ${kind}" style="margin-top:6px;opacity:.85">` +
+        `<span class="fr-name" style="font-weight:700">exponent</span>` +
+        `<div class="fr-track"><div class="fr-fill" style="width:${(contribution.exponent * 100).toFixed(1)}%"></div></div>` +
+        `<span class="fr-value">${contribution.exponent.toFixed(2)}</span>` +
+        `</div>`
+      );
+
+      container.innerHTML = rows.join('');
+    }
 
     /* ==========================================================
        UI HELPERS
        ========================================================== */
     function setConnectionStatus(state) {
       $connStatus.className = 'connection-status ' + state;
-      const labels = { connected: 'Connected', disconnected: 'Disconnected', reconnecting: 'Reconnecting…' };
+      const labels = {
+        connected: 'Connected',
+        disconnected: 'Disconnected',
+        reconnecting: 'Reconnecting…',
+      };
       $connStatusT.textContent = labels[state] || state;
     }
 
     function setFaceBadge(detected) {
-      if (detected) {
-        $faceBadge.className = 'video-status-badge face-detected';
-        $faceBadgeT.textContent = 'Face Detected';
-      } else {
-        $faceBadge.className = 'video-status-badge no-face';
-        $faceBadgeT.textContent = 'No Face Detected';
-      }
+      $faceBadge.className = 'video-status-badge ' + (detected ? 'face-detected' : 'no-face');
+      $faceBadgeT.textContent = detected ? 'Face Detected' : 'No Face Detected';
     }
 
+    function setTextEnabled(enabled) {
+      textAvailable = enabled;
+      $chatInput.disabled = !enabled;
+      $btnSend.disabled = !enabled;
+      $chatInput.placeholder = enabled
+        ? 'Type a message… (Enter to send)'
+        : 'No text model loaded on the server';
+    }
+
+    setTextEnabled(false);
+
     /* ==========================================================
-       OVERLAY DRAWING
+       OVERLAY
        ========================================================== */
     const ctx = $overlay.getContext('2d');
 
@@ -900,14 +1145,9 @@
       ctx.clearRect(0, 0, $overlay.width, $overlay.height);
     }
 
-    /**
-     * Draw the bounding box + label scaled to overlay dimensions.
-     * The bbox coords are relative to the original video resolution.
-     */
     function drawBBox(bbox, label, confidence, color) {
       if (!$video.videoWidth || !$video.videoHeight) return;
 
-      // Match canvas internal resolution to display size.
       const dw = $overlay.clientWidth;
       const dh = $overlay.clientHeight;
       if ($overlay.width !== dw || $overlay.height !== dh) {
@@ -925,7 +1165,6 @@
 
       clearOverlay();
 
-      // Rounded-rect bbox
       const r = 8;
       ctx.lineWidth = 2.5;
       ctx.strokeStyle = color;
@@ -945,24 +1184,16 @@
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // Corner accents (thicker, shorter strokes at each corner)
       const accentLen = Math.min(w, h) * 0.18;
       ctx.lineWidth = 4;
-      ctx.strokeStyle = color;
-      // Top-left
       ctx.beginPath(); ctx.moveTo(x, y + accentLen); ctx.lineTo(x, y); ctx.lineTo(x + accentLen, y); ctx.stroke();
-      // Top-right
       ctx.beginPath(); ctx.moveTo(x + w - accentLen, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + accentLen); ctx.stroke();
-      // Bottom-left
       ctx.beginPath(); ctx.moveTo(x, y + h - accentLen); ctx.lineTo(x, y + h); ctx.lineTo(x + accentLen, y + h); ctx.stroke();
-      // Bottom-right
       ctx.beginPath(); ctx.moveTo(x + w - accentLen, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - accentLen); ctx.stroke();
 
-      // Label pill above box
       const text = `${label}  ${(confidence * 100).toFixed(1)}%`;
       ctx.font = '600 14px Inter, sans-serif';
-      const tm = ctx.measureText(text);
-      const pillW = tm.width + 20;
+      const pillW = ctx.measureText(text).width + 20;
       const pillH = 26;
       const pillX = x + (w - pillW) / 2;
       const pillY = y - pillH - 8;
@@ -992,15 +1223,17 @@
         $video.srcObject = videoStream;
         $placeholder.classList.add('hidden');
         await $video.play();
+        return true;
       } catch (err) {
         console.error('Webcam error:', err);
-        alert('Could not access webcam. Please grant camera permission and reload.');
+        alert('Could not access the webcam. Text-only still works — grant camera permission and press Start again for the full system.');
+        return false;
       }
     }
 
     function stopWebcam() {
       if (videoStream) {
-        videoStream.getTracks().forEach(t => t.stop());
+        videoStream.getTracks().forEach((t) => t.stop());
         videoStream = null;
       }
       $video.srcObject = null;
@@ -1019,25 +1252,44 @@
       ws.onopen = () => {
         reconnectAttempts = 0;
         setConnectionStatus('connected');
-        awaitingResponse = false;
-        sendNextFrame();            // kick off the pipeline
+        awaitingFrameAck = false;
+        sendNextFrame();
       };
 
       ws.onmessage = (evt) => {
+        let data;
         try {
-          const data = JSON.parse(evt.data);
-          handlePrediction(data);
+          data = JSON.parse(evt.data);
         } catch (e) {
           console.warn('Bad WS message', e);
+          return;
         }
-        // Frame-ack: now safe to send the next frame.
-        awaitingResponse = false;
-        if (running) sendNextFrame();
+
+        // Frame pacing keys off frame replies only. Text results and
+        // errors arrive on the same socket and must not be mistaken
+        // for the acknowledgement of a frame in flight, or the client
+        // would run two frames ahead of the server.
+        switch (data.type) {
+          case 'hello':
+            handleHello(data);
+            break;
+          case 'frame':
+            handleFrame(data);
+            awaitingFrameAck = false;
+            if (running) sendNextFrame();
+            break;
+          case 'text_result':
+            handleTextResult(data);
+            break;
+          case 'error':
+            handleServerError(data);
+            break;
+          default:
+            console.warn('Unknown message type', data.type);
+        }
       };
 
-      ws.onerror = (err) => {
-        console.error('WebSocket error', err);
-      };
+      ws.onerror = (err) => console.error('WebSocket error', err);
 
       ws.onclose = () => {
         setConnectionStatus('disconnected');
@@ -1050,117 +1302,356 @@
     }
 
     /* ==========================================================
-       FRAME CAPTURE & SEND  (frame-paced)
+       SERVER MESSAGES
        ========================================================== */
-    function sendNextFrame() {
-      if (!running || awaitingResponse) return;
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      if (!$video.videoWidth) {
-        // Video not ready yet — retry on next paint.
-        requestAnimationFrame(sendNextFrame);
-        return;
+    function handleHello(data) {
+      if (Array.isArray(data.labels) && data.labels.length) {
+        EMOTION_KEYS = data.labels;
+        [$fusedDist, $faceDist, $textDist].forEach(buildDistList);
       }
 
-      // Capture to offscreen canvas.
-      $capture.width = $video.videoWidth;
-      $capture.height = $video.videoHeight;
-      const cctx = $capture.getContext('2d');
-      cctx.drawImage($video, 0, 0);
+      const landmarks = data.landmarks;
+      $chipDetector.textContent = `${data.detector} · ${data.crop_mode || 'crop'}`;
+      $chipDetector.className = 'chip ' + (landmarks ? 'good' : 'warn');
+      $chipDetector.title = landmarks
+        ? 'Landmark detector. Adaptive crop: plain box on an upright face, '
+          + 'aligned warp past the roll threshold.'
+        : 'Haar fallback: no landmarks, so roll cannot be measured and the '
+          + 'plain box crop is always used. Run setup_models.py.';
 
-      const dataUrl = $capture.toDataURL('image/jpeg', JPEG_QUALITY);
-      // Strip the "data:image/jpeg;base64," prefix — backend handles both formats.
-      const b64 = dataUrl.split(',')[1];
+      // Compute device gets its own chip rather than a line in another
+      // chip's tooltip. Running the face model on CPU is a ~46x
+      // slowdown, and it used to be visible only as a low frame rate.
+      if (data.face_provider || data.text_device) {
+        const faceGpu = data.face_provider
+                     && data.face_provider !== 'CPUExecutionProvider';
+        const textGpu = data.text_device && data.text_device !== 'cpu';
 
-      awaitingResponse = true;
-      ws.send(b64);
+        const shortName = (data.face_provider || '')
+          .replace('ExecutionProvider', '')
+          .toLowerCase() || 'cpu';
+
+        $chipDevice.textContent = faceGpu
+          ? `gpu · ${shortName}`
+          : (textGpu ? 'cpu face · gpu text' : 'cpu only');
+
+        // A CPU face path is a warning, not a neutral fact: it is
+        // almost always an accident rather than a choice.
+        $chipDevice.className = 'chip ' + (faceGpu ? 'good' : 'warn');
+
+        $chipDevice.title = faceGpu
+          ? `face: ${data.face_provider}\ntext: ${data.text_device}`
+          : `face: ${data.face_provider}\ntext: ${data.text_device}\n\n`
+            + 'The face model is on CPU (~303 ms/frame against ~6.6 ms '
+            + 'on CUDA). If you expected a GPU, check that exactly one '
+            + 'onnxruntime wheel is installed:\n'
+            + '  pip list | grep onnxruntime\n'
+            + 'and start with --device gpu to fail loudly instead of '
+            + 'falling back.';
+      }
+
+      setTextEnabled(Boolean(data.text_available));
+
+      if (data.text_available) {
+        const sevenClass = data.text_task === 'goemotions';
+        $chipText.textContent = sevenClass ? 'text · 7-class' : 'text · 6-class';
+        $chipText.className = 'chip ' + (sevenClass ? 'good' : 'warn');
+        $chipText.title = sevenClass
+          ? data.text_model
+          : `${data.text_model} — cannot predict neutral or disgust.`;
+        $chatModelNote.textContent = data.text_model;
+      } else {
+        $chipText.textContent = 'text · off';
+        $chipText.className = 'chip off';
+        $chatModelNote.textContent = 'unavailable';
+      }
     }
 
-    /* ==========================================================
-       HANDLE SERVER PREDICTION
-       ========================================================== */
-    function handlePrediction(data) {
-      if (data.error) {
-        console.warn('Server error:', data.error);
-        return;
-      }
-
-      // FPS
+    function handleFrame(data) {
       const fps = data.fps != null ? data.fps.toFixed(1) : '—';
       $fpsBadge.textContent = `${fps} FPS`;
       $statFps.textContent = fps;
 
-      // MediaPipe confidence
-      if (data.mediapipe_confidence != null) {
-        $statMpConf.textContent = (data.mediapipe_confidence * 100).toFixed(0) + '%';
-      } else {
-        $statMpConf.textContent = '—';
-      }
+      renderFace(data.face);
+      renderTextEvidence(data.text);
+      renderFusion(data.fusion, data.face);
+    }
 
-      if (data.face_detected && data.vit_prediction) {
-        const label = data.vit_prediction.label;
-        const conf  = data.vit_prediction.confidence;
-        const color = EMOTION_COLORS[label] || '#6c8aff';
-        const emoji = EMOTION_EMOJIS[label] || '❓';
-
-        setFaceBadge(true);
-
-        // Overlay bbox
-        if (data.bbox) {
-          drawBBox(data.bbox, label, conf, color);
-        }
-
-        // Video emotion pill
-        $emotionLabel.style.display = '';
-        $emotionEmoji.textContent = emoji;
-        $emotionLabelT.textContent = `${label} — ${(conf * 100).toFixed(1)}%`;
-
-        // Sidebar
-        $statEmoji.textContent = emoji;
-        if (label !== prevEmotion) {
-          $statEmoji.classList.add('pop');
-          setTimeout(() => $statEmoji.classList.remove('pop'), 350);
-          prevEmotion = label;
-        }
-        $statEmoName.textContent = label;
-        $statConfVal.textContent = (conf * 100).toFixed(1) + '%';
-        $statConfBar.style.width = (conf * 100) + '%';
-
-        // Distribution (EMA blend)
-        const alpha = 0.25;
-        EMOTION_KEYS.forEach(k => {
-          distribution[k] *= (1 - alpha);
-        });
-        distribution[label] = distribution[label] + alpha * 1.0;
-        // Normalise for display
-        const total = EMOTION_KEYS.reduce((s, k) => s + distribution[k], 0) || 1;
-        EMOTION_KEYS.forEach(k => {
-          const pct = (distribution[k] / total) * 100;
-          const bar = document.getElementById(`dist-${k}`);
-          const val = document.getElementById(`distv-${k}`);
-          if (bar) bar.style.width = pct.toFixed(1) + '%';
-          if (val) val.textContent = pct.toFixed(0) + '%';
-        });
-
-      } else {
+    function renderFace(face) {
+      if (!face || !face.detected) {
         setFaceBadge(false);
         clearOverlay();
         $emotionLabel.style.display = 'none';
-        $statEmoji.textContent = '🔍';
-        $statEmoName.textContent = 'No Face';
-        $statConfVal.textContent = '0%';
-        $statConfBar.style.width = '0%';
+        $statQuality.textContent = '—';
+        $faceNote.textContent = 'no face';
+        $faceQualityNote.textContent = 'No face detected.';
+        renderDist($faceDist, null);
+        return;
+      }
+
+      setFaceBadge(true);
+
+      const label = face.label;
+      const color = EMOTION_COLORS[label] || '#6c8aff';
+      const emoji = EMOTION_EMOJIS[label] || '❓';
+
+      if (face.bbox) drawBBox(face.bbox, label, face.confidence, color);
+
+      $emotionLabel.style.display = '';
+      $emotionEmoji.textContent = emoji;
+      $emotionLabelT.textContent = `${label} — ${(face.confidence * 100).toFixed(1)}%`;
+
+      renderDist($faceDist, face.probs);
+
+      const q = face.quality || {};
+      $statQuality.textContent = q.overall != null ? (q.overall * 100).toFixed(0) + '%' : '—';
+      $faceNote.textContent = `${label} ${(face.confidence * 100).toFixed(0)}%`;
+
+      const detConf = face.detector_confidence;
+      $faceQualityNote.textContent =
+        `Detector ${detConf != null ? (detConf * 100).toFixed(0) + '%' : 'n/a'}` +
+        ` · quality ${(q.overall * 100).toFixed(0)}%` +
+        (q.weakest ? ` · weakest: ${q.weakest}` : '');
+    }
+
+    function renderTextEvidence(text) {
+      if (!text) {
+        $textQuote.style.display = 'none';
+        $decayRow.style.display = 'none';
+        $textEmptyNote.style.display = '';
+        $textEmptyNote.textContent = textAvailable
+          ? 'No active message. Send one to add text evidence.'
+          : 'No text model loaded on the server.';
+        $textNote.textContent = '—';
+        renderDist($textDist, null);
+        return;
+      }
+
+      $textQuote.style.display = '';
+      $textQuote.textContent = `“${text.text}”`;
+      $textEmptyNote.style.display = 'none';
+      $textNote.textContent = `${text.label} ${(text.confidence * 100).toFixed(0)}%`;
+      renderDist($textDist, text.probs);
+    }
+
+    function renderFusion(fusion, face) {
+      if (!fusion || !fusion.label) {
+        $fusedEmoji.textContent = '🔍';
+        $fusedName.textContent = 'Waiting…';
+        $fusedSub.textContent = 'no evidence yet';
+        $fusedModeNote.textContent = '—';
+        $fusedConfValue.textContent = '0%';
+        $fusedConfBar.style.width = '0%';
+        $conflictBanner.classList.remove('visible');
+        $agreementNote.textContent = '—';
+        renderDist($fusedDist, null);
+        renderFactors($faceFactors, null, 'face');
+        renderFactors($textFactors, null, 'text');
+        $segFace.style.width = '50%';
+        $segText.style.width = '50%';
+        $legendFace.textContent = '—';
+        $legendText.textContent = '—';
+        $decayRow.style.display = 'none';
+        return;
+      }
+
+      const label = fusion.label;
+      const emoji = EMOTION_EMOJIS[label] || '❓';
+      const color = EMOTION_COLORS[label] || '#6c8aff';
+
+      $fusedEmoji.textContent = emoji;
+      if (label !== prevFusedLabel) {
+        $fusedEmoji.classList.add('pop');
+        setTimeout(() => $fusedEmoji.classList.remove('pop'), 350);
+        prevFusedLabel = label;
+      }
+
+      $fusedName.textContent = label;
+      $fusedName.style.color = color;
+
+      const modeText = {
+        fused: 'face + text',
+        face_only: 'face only',
+        text_only: 'text only',
+      }[fusion.mode] || fusion.mode;
+
+      $fusedSub.textContent = modeText;
+      $fusedModeNote.textContent = modeText;
+
+      $fusedConfValue.textContent = (fusion.confidence * 100).toFixed(1) + '%';
+      $fusedConfBar.style.width = (fusion.confidence * 100) + '%';
+      $fusedConfBar.style.background = `linear-gradient(90deg, ${color}, ${color}bb)`;
+
+      renderDist($fusedDist, fusion.probs);
+
+      // Contribution split
+      const wFace = fusion.weights.face;
+      const wText = fusion.weights.text;
+
+      $segFace.style.width = (wFace * 100).toFixed(1) + '%';
+      $segText.style.width = (wText * 100).toFixed(1) + '%';
+      $segFace.textContent = wFace > 0.12 ? (wFace * 100).toFixed(0) + '%' : '';
+      $segText.textContent = wText > 0.12 ? (wText * 100).toFixed(0) + '%' : '';
+      $legendFace.textContent = (wFace * 100).toFixed(0) + '%';
+      $legendText.textContent = (wText * 100).toFixed(0) + '%';
+
+      const weakest = face && face.quality ? face.quality.weakest : null;
+      renderFactors($faceFactors, fusion.face, 'face', weakest);
+      renderFactors($textFactors, fusion.text, 'text');
+
+      // Text decay meter, driven by the recency factor the server sent
+      if (fusion.text && fusion.text.present) {
+        const recency = fusion.text.factors.recency ?? 0;
+        const age = fusion.text.factors.age_seconds ?? 0;
+        $decayRow.style.display = '';
+        $decayFill.style.width = (recency * 100).toFixed(1) + '%';
+        $decayValue.textContent = `${age.toFixed(0)}s ago`;
+      } else {
+        $decayRow.style.display = 'none';
+      }
+
+      // Agreement / conflict
+      if (fusion.mode === 'fused') {
+        $agreementNote.textContent = `agreement ${(fusion.agreement * 100).toFixed(0)}%`;
+      } else {
+        $agreementNote.textContent = modeText;
+      }
+
+      if (fusion.conflicted) {
+        const faceLabel = face && face.label ? face.label : 'the face';
+        const textLabel = fusion.text && fusion.text.present ? ($textNote.textContent.split(' ')[0]) : 'the text';
+        $conflictText.textContent =
+          `The modalities disagree — the face reads ${faceLabel} while the text reads ${textLabel}. ` +
+          `The fused answer below is a weighted compromise, not a confident call.`;
+        $conflictBanner.classList.add('visible');
+      } else {
+        $conflictBanner.classList.remove('visible');
+      }
+    }
+
+    function handleTextResult(data) {
+      const entry = pendingMessages.get(data.id);
+      if (!entry) return;
+
+      pendingMessages.delete(data.id);
+
+      const label = data.label;
+      const color = EMOTION_COLORS[label] || '#6c8aff';
+      const emoji = EMOTION_EMOJIS[label] || '❓';
+
+      entry.classList.remove('pending');
+
+      const meta = entry.querySelector('.message-meta');
+      meta.innerHTML =
+        `<span class="emotion-chip" style="--emo-color:${color}">` +
+        `<span>${emoji}</span>${label} ${(data.confidence * 100).toFixed(0)}%</span>` +
+        `<span class="latency">${data.token_count} tok · ${data.latency_ms.toFixed(0)} ms</span>`;
+    }
+
+    function handleServerError(data) {
+      console.warn('Server error:', data.message);
+
+      // Mark the oldest still-pending message as failed, so a rejected
+      // send does not sit spinning forever.
+      const oldest = pendingMessages.keys().next();
+      if (!oldest.done) {
+        const entry = pendingMessages.get(oldest.value);
+        pendingMessages.delete(oldest.value);
+        entry.classList.remove('pending');
+        entry.classList.add('failed');
+        entry.querySelector('.message-meta').innerHTML =
+          `<span class="latency" style="color:var(--accent-red)">${data.message}</span>`;
       }
     }
 
     /* ==========================================================
-       START / STOP SESSION
+       FRAME CAPTURE
+       ========================================================== */
+    function sendNextFrame() {
+      if (!running || awaitingFrameAck) return;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+      if (!$video.videoWidth) {
+        requestAnimationFrame(sendNextFrame);
+        return;
+      }
+
+      $capture.width = $video.videoWidth;
+      $capture.height = $video.videoHeight;
+      $capture.getContext('2d').drawImage($video, 0, 0);
+
+      const b64 = $capture.toDataURL('image/jpeg', JPEG_QUALITY).split(',')[1];
+
+      awaitingFrameAck = true;
+      ws.send(JSON.stringify({ type: 'frame', data: b64 }));
+    }
+
+    /* ==========================================================
+       CHAT
+       ========================================================== */
+    function appendMessage(text, id) {
+      $chatEmpty.style.display = 'none';
+
+      const entry = document.createElement('div');
+      entry.className = 'message pending';
+      entry.innerHTML =
+        `<div class="message-bubble"></div><div class="message-meta"></div>`;
+      entry.querySelector('.message-bubble').textContent = text;
+
+      $chatLog.appendChild(entry);
+      $chatLog.scrollTop = $chatLog.scrollHeight;
+
+      pendingMessages.set(id, entry);
+      return entry;
+    }
+
+    function sendMessage() {
+      const text = $chatInput.value.trim();
+      if (!text) return;
+
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert('Not connected. Press Start Session first.');
+        return;
+      }
+
+      const id = ++messageCounter;
+      appendMessage(text, id);
+
+      ws.send(JSON.stringify({ type: 'text', text, id }));
+
+      $chatInput.value = '';
+      $chatInput.style.height = 'auto';
+      $chatInput.focus();
+    }
+
+    $btnSend.addEventListener('click', sendMessage);
+
+    $chatInput.addEventListener('keydown', (e) => {
+      // Enter sends; Shift+Enter is a newline, which is the convention
+      // every chat box uses and the one people will reach for.
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    $chatInput.addEventListener('input', () => {
+      $chatInput.style.height = 'auto';
+      $chatInput.style.height = Math.min($chatInput.scrollHeight, 110) + 'px';
+    });
+
+    /* ==========================================================
+       SESSION
        ========================================================== */
     async function startSession() {
       $btnStart.disabled = true;
-      $btnStop.disabled  = false;
+      $btnStop.disabled = false;
       running = true;
       reconnectAttempts = 0;
 
+      // The socket is opened regardless of whether the camera works,
+      // so a machine with no webcam can still demonstrate the text
+      // modality and text-only fusion.
       await startWebcam();
       connectWebSocket();
     }
@@ -1168,7 +1659,7 @@
     function stopSession() {
       running = false;
       $btnStart.disabled = false;
-      $btnStop.disabled  = true;
+      $btnStop.disabled = true;
 
       if (ws) { ws.close(); ws = null; }
       stopWebcam();
@@ -1179,6 +1670,12 @@
       $faceBadge.className = 'video-status-badge no-face';
       $faceBadgeT.textContent = 'Waiting…';
       $fpsBadge.textContent = '— FPS';
+      $statFps.textContent = '—';
+      $statQuality.textContent = '—';
+
+      renderFusion(null, null);
+      renderDist($faceDist, null);
+      renderDist($textDist, null);
     }
 
     $btnStart.addEventListener('click', startSession);

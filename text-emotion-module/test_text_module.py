@@ -30,12 +30,12 @@ class Skip(Exception):
     """Raised to mark a test as skipped rather than failed."""
 
 
-def require_checkpoint(model_key):
+def require_checkpoint(model_key, task="mteb"):
 
-    directory = config.checkpoint_path(model_key)
+    directory = config.get_task(task).checkpoint_path(model_key)
 
     if not (directory / "config.json").exists():
-        raise Skip(f"no checkpoint for {model_key}")
+        raise Skip(f"no {task} checkpoint for {model_key}")
 
     return directory
 
@@ -324,30 +324,62 @@ def test_report_renders_every_emotion():
 # ============================================================
 
 def test_checkpoints_predict_in_range():
+    """Every trained checkpoint, in either task, predicts sanely.
+
+    Both label spaces are covered rather than just the default, because
+    the six-class checkpoints stay in the repository as the
+    architecture comparison and must keep working.
+    """
 
     from predict import TextEmotionClassifier
 
     trained = [
-        key for key in config.MODELS
-        if (config.checkpoint_path(key) / "config.json").exists()
+        (task_key, model_key)
+        for task_key in config.TASKS
+        for model_key in config.MODELS
+        if (config.get_task(task_key).checkpoint_path(model_key)
+            / "config.json").exists()
     ]
 
     if not trained:
         raise Skip("no checkpoints trained yet")
 
-    for key in trained:
+    for task_key, model_key in trained:
 
-        classifier = TextEmotionClassifier(key)
+        task = config.get_task(task_key)
+
+        classifier = TextEmotionClassifier(model_key, task=task_key)
 
         prediction = classifier.predict("i am so happy to see you again")
 
-        assert prediction["label"] in config.ID2LABEL.values()
+        assert prediction["task"] == task_key
+
+        # The native label belongs to that task's own vocabulary.
+        assert prediction["label"] in task.id2label.values()
 
         assert 0.0 <= prediction["confidence"] <= 1.0
 
         assert abs(sum(prediction["distribution"].values()) - 1.0) < 1e-4
 
-        assert prediction["shared_label"] in config.TEXT_TO_SHARED_LABEL.values()
+        # The shared projection always lands in the seven-class space,
+        # whichever task produced it - that is the contract fusion
+        # depends on.
+        assert prediction["shared_label"] in config.SHARED_LABELS
+
+        assert set(prediction["shared_distribution"]) == set(config.SHARED_LABELS)
+
+        assert abs(
+            sum(prediction["shared_distribution"].values()) - 1.0
+        ) < 1e-4
+
+        assert prediction["token_count"] > 0
+
+        if task_key == "mteb":
+            # A six-class model cannot argue for either of the two
+            # classes it was never trained on. This is the concrete
+            # handicap that motivated the GoEmotions task.
+            assert prediction["shared_distribution"]["neutral"] == 0.0
+            assert prediction["shared_distribution"]["disgust"] == 0.0
 
 
 def test_predictions_are_deterministic():
@@ -356,7 +388,7 @@ def test_predictions_are_deterministic():
 
     require_checkpoint("tinybert")
 
-    classifier = TextEmotionClassifier("tinybert")
+    classifier = TextEmotionClassifier("tinybert", task="mteb")
 
     sentence = "i am terrified of what happens next"
 
@@ -374,7 +406,7 @@ def test_batching_does_not_change_predictions():
 
     require_checkpoint("tinybert")
 
-    classifier = TextEmotionClassifier("tinybert")
+    classifier = TextEmotionClassifier("tinybert", task="mteb")
 
     sentences = [
         "i am so happy to see you again",
@@ -445,6 +477,260 @@ def test_tinybert_is_the_smallest_of_the_three():
     ratio = config.BERT_BASE_PARAMS / by_size["tinybert"]
 
     assert ratio > 7.0
+
+
+# ============================================================
+# GOEMOTIONS TASK
+# ============================================================
+#
+# These cover the label projection rather than the model. A
+# silent error in the mapping would not crash anything - it
+# would just train a perfectly healthy classifier on quietly
+# wrong labels, and every metric downstream would look fine.
+# ============================================================
+
+def test_ekman_grouping_covers_every_goemotions_label():
+
+    assert len(config.GOEMOTIONS_LABELS) == 28
+
+    covered = set(config.GOEMOTIONS_TO_SHARED)
+
+    assert covered == set(config.GOEMOTIONS_LABELS), (
+        f"unmapped: {set(config.GOEMOTIONS_LABELS) - covered}"
+    )
+
+
+def test_ekman_groups_are_disjoint():
+
+    seen = set()
+
+    for group, members in config.EKMAN_TO_SHARED.items():
+        for member in members:
+            assert member not in seen, f"{member} appears in two groups"
+            seen.add(member)
+
+
+def test_ekman_groups_land_on_the_shared_space():
+
+    targets = set(config.GOEMOTIONS_TO_SHARED.values())
+
+    assert targets == set(config.SHARED_LABELS), (
+        f"missing shared labels: {set(config.SHARED_LABELS) - targets}"
+    )
+
+    # The two classes that motivated the whole task must be
+    # reachable, or fusion is back to five usable classes.
+    assert config.GOEMOTIONS_TO_SHARED["neutral"] == "neutral"
+    assert config.GOEMOTIONS_TO_SHARED["disgust"] == "disgust"
+
+
+def test_goemotions_id_mapping_matches_names():
+
+    for index, name in enumerate(config.GOEMOTIONS_LABELS):
+
+        expected = config.SHARED_LABEL2ID[config.GOEMOTIONS_TO_SHARED[name]]
+
+        assert config.GOEMOTIONS_ID_TO_SHARED_ID[index] == expected
+
+
+def test_specific_ekman_assignments():
+
+    # Spot-checks of the groupings a reader is most likely to
+    # question, pinned so a future edit has to be deliberate.
+    cases = {
+        "annoyance": "angry",
+        "disapproval": "angry",
+        "nervousness": "fear",
+        "gratitude": "happy",
+        "pride": "happy",
+        "love": "happy",
+        "grief": "sad",
+        "remorse": "sad",
+        "embarrassment": "sad",
+        "curiosity": "surprise",
+        "confusion": "surprise",
+        "realization": "surprise",
+    }
+
+    for fine, shared in cases.items():
+        assert config.GOEMOTIONS_TO_SHARED[fine] == shared, (
+            f"{fine} -> {config.GOEMOTIONS_TO_SHARED[fine]}, expected {shared}"
+        )
+
+
+def test_shared_space_matches_the_deployment_module():
+    """The two copies of the shared vocabulary must agree.
+
+    config.SHARED_LABELS is duplicated from the deployment folder so
+    this module stays runnable alone. The ONNX classifier head is the
+    real source of truth, and a divergence would misalign every
+    probability vector fusion compares.
+    """
+
+    from pathlib import Path
+
+    deployment = Path(__file__).resolve().parent.parent / "vit-emotion-v2-deployment"
+
+    if not (deployment / "labels.py").exists():
+        raise Skip("deployment module not present")
+
+    sys.path.insert(0, str(deployment))
+
+    try:
+        import labels as deployment_labels
+    finally:
+        sys.path.remove(str(deployment))
+
+    assert tuple(config.SHARED_LABELS) == tuple(deployment_labels.SHARED_LABELS)
+
+    # And both must match what the exported model actually emits.
+    emotion_config = json.loads(
+        (deployment / "emotion_config.json").read_text(encoding="utf-8")
+    )
+
+    ordered = tuple(
+        emotion_config["id2label"][str(index)]
+        for index in range(len(emotion_config["id2label"]))
+    )
+
+    assert ordered == tuple(config.SHARED_LABELS)
+
+
+def test_task_registry_keeps_the_tasks_apart():
+
+    mteb = config.get_task("mteb")
+    goemotions = config.get_task("goemotions")
+
+    assert mteb.num_labels == 6
+    assert goemotions.num_labels == 7
+
+    # Distinct checkpoint directories, or training one task would
+    # overwrite the other's weights.
+    assert mteb.checkpoint_path("tinybert") != goemotions.checkpoint_path("tinybert")
+    assert mteb.results_file != goemotions.results_file
+
+    # The MTEB task must keep its original layout so the already
+    # trained six-class checkpoints stay discoverable.
+    assert mteb.checkpoint_path("tinybert").name == "tinybert"
+
+    try:
+        config.get_task("nonsense")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unknown task should raise ValueError")
+
+
+# ============================================================
+# METRICS ACROSS LABEL SPACES
+# ============================================================
+
+def test_metrics_respect_the_task_label_space():
+
+    labels = np.array([0, 1, 2, 3, 4, 5, 6])
+
+    result = compute_metrics(labels, labels, config.SHARED_ID2LABEL)
+
+    assert result["accuracy"] == 1.0
+    assert set(result["per_class"]) == set(config.SHARED_LABELS)
+
+    matrix = compute_confusion_matrix(labels, labels, config.SHARED_ID2LABEL)
+    assert matrix.shape == (7, 7)
+
+    # Default still scores in the six-class MTEB space.
+    six = compute_metrics(np.array([0, 1, 2]), np.array([0, 1, 2]))
+    assert set(six["per_class"]) == set(config.ID2LABEL.values())
+
+
+# ============================================================
+# CALIBRATION
+# ============================================================
+
+def test_temperature_scaling_reduces_ece_without_changing_predictions():
+
+    from calibration import (
+        expected_calibration_error,
+        fit_temperature,
+        softmax,
+    )
+
+    rng = np.random.default_rng(0)
+
+    count, classes = 3000, 7
+
+    labels = rng.integers(0, classes, size=count)
+    logits = rng.normal(0.0, 1.0, size=(count, classes))
+
+    hit = rng.random(count) < 0.7
+    logits[np.arange(count)[hit], labels[hit]] += 3.0
+
+    # Inflate so the model is overconfident, the condition
+    # temperature scaling exists to correct.
+    logits *= 2.5
+
+    temperature, before, after = fit_temperature(logits, labels)
+
+    assert after < before, f"ECE got worse: {before} -> {after}"
+
+    # Scaling is monotone, so it must not move a single argmax.
+    assert np.array_equal(
+        logits.argmax(axis=1), (logits / temperature).argmax(axis=1)
+    )
+
+    assert abs(softmax(logits / temperature).sum(axis=1) - 1.0).max() < 1e-9
+
+
+def test_missing_calibration_file_falls_back_to_one():
+    """Checkpoints trained before calibration existed must still load."""
+
+    from pathlib import Path
+
+    from calibration import load_temperature
+
+    assert load_temperature(Path("does-not-exist")) == 1.0
+
+
+# ============================================================
+# GOEMOTIONS DATA (network)
+# ============================================================
+
+def test_goemotions_projection_is_single_label():
+    """Every surviving row must carry exactly one shared label."""
+
+    from data import _to_shared_label
+
+    # A row whose fine labels all collapse to one group survives.
+    admiration = config.GOEMOTIONS_LABELS.index("admiration")
+    gratitude = config.GOEMOTIONS_LABELS.index("gratitude")
+
+    assert _to_shared_label([admiration, gratitude]) == config.SHARED_LABEL2ID["happy"]
+
+    # A row spanning two groups is genuinely ambiguous and dropped.
+    sadness = config.GOEMOTIONS_LABELS.index("sadness")
+    assert _to_shared_label([admiration, sadness]) is None
+
+    # Single labels pass through.
+    neutral = config.GOEMOTIONS_LABELS.index("neutral")
+    assert _to_shared_label([neutral]) == config.SHARED_LABEL2ID["neutral"]
+
+
+def test_class_weights_handle_seven_classes():
+
+    from data import task_class_weights
+
+    class Stub:
+        labels = [0, 0, 0, 0, 1, 2, 3, 3, 4, 5, 6]
+
+    class Loader:
+        dataset = Stub()
+
+    weights = task_class_weights(Loader(), 7)
+
+    assert len(weights) == 7
+    assert torch.all(weights > 0)
+
+    # The rarest classes must be weighted above the commonest.
+    assert weights[1] > weights[0]
 
 
 # ============================================================

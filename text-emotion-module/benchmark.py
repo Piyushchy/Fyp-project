@@ -25,16 +25,22 @@ import numpy as np
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from config import (
-    NUM_LABELS,
-    BERT_BASE_PARAMS,
-    MODELS,
-    RESULTS_FILE,
-    checkpoint_path,
-    ensure_directories,
+from calibration import (
+    expected_calibration_error,
+    load_temperature,
+    softmax,
 )
-from data import build_dataloaders
-from metrics import compute_confusion_matrix, compute_metrics, format_report
+from config import (
+    BERT_BASE_PARAMS,
+    DEFAULT_TASK,
+    MODELS,
+    NUM_LABELS,
+    TASKS,
+    ensure_directories,
+    get_task,
+)
+from data import build_task_dataloaders
+from metrics import compute_confusion_matrix, format_report
 from modeling import load_model
 from train import evaluate
 
@@ -88,14 +94,14 @@ def measure_latency(model, tokenizer, device):
 # SIZE
 # ============================================================
 
-def measure_size(model_key, model):
+def measure_size(directory, model):
     """Parameter count and the size of the saved weight files."""
 
     parameters = sum(p.numel() for p in model.parameters())
 
     weight_bytes = sum(
         path.stat().st_size
-        for path in checkpoint_path(model_key).glob("*")
+        for path in directory.glob("*")
         if path.suffix in (".safetensors", ".bin")
     )
 
@@ -110,29 +116,32 @@ def measure_size(model_key, model):
 # BENCHMARK ONE MODEL
 # ============================================================
 
-def benchmark_model(model_key, device):
+def benchmark_model(model_key, task, device):
 
     settings = MODELS[model_key]
 
-    directory = checkpoint_path(model_key)
+    directory = task.checkpoint_path(model_key)
 
     if not directory.exists():
         raise FileNotFoundError(
-            f"No checkpoint at {directory}. Run: python train.py --model {model_key}"
+            f"No checkpoint at {directory}. Run: "
+            f"python train.py --task {task.key} --model {model_key}"
         )
 
     print("=" * 60)
-    print(f"BENCHMARKING  {settings['display_name']}")
+    print(f"BENCHMARKING  {settings['display_name']}  [{task.key}]")
     print("=" * 60)
 
     tokenizer = AutoTokenizer.from_pretrained(directory)
 
     model = load_model(model_key, directory).to(device)
 
-    _, _, test_loader = build_dataloaders(
+    _, _, test_loader = build_task_dataloaders(
+        task,
         tokenizer,
         settings["batch_size"],
         settings["max_length"],
+        verbose=False,
     )
 
     # --------------------------------------------------------
@@ -141,17 +150,39 @@ def benchmark_model(model_key, device):
 
     throughput_started = time.perf_counter()
 
-    metrics, predictions, labels = evaluate(model, test_loader, device)
+    metrics, predictions, labels, logits = evaluate(
+        model, test_loader, device, task
+    )
 
     throughput_seconds = time.perf_counter() - throughput_started
 
     print(format_report(metrics))
 
     # --------------------------------------------------------
+    # CALIBRATION
+    # --------------------------------------------------------
+    #
+    # The temperature was fitted on validation during training; this
+    # reports what it buys on the held-out test split. Accuracy and
+    # macro-F1 above are unchanged by it - scaling is monotone - so
+    # the only thing that moves is how honest the confidence is, which
+    # is precisely what the fusion pool consumes.
+
+    temperature = load_temperature(directory)
+
+    ece_raw = expected_calibration_error(softmax(logits), labels)
+    ece_calibrated = expected_calibration_error(
+        softmax(logits / temperature), labels
+    )
+
+    print(f"\nCalibration     T={temperature:.3f}  "
+          f"test ECE {ece_raw:.4f} -> {ece_calibrated:.4f}")
+
+    # --------------------------------------------------------
     # SIZE AND SPEED
     # --------------------------------------------------------
 
-    size = measure_size(model_key, model)
+    size = measure_size(directory, model)
 
     latency = measure_latency(model, tokenizer, device)
 
@@ -174,15 +205,24 @@ def benchmark_model(model_key, device):
 
     return {
         "model_key": model_key,
+        "task": task.key,
         "display_name": settings["display_name"],
         "hub_id": settings["hub_id"],
         "note": settings["note"],
+        "labels": task.labels,
         "metrics": metrics,
+        "calibration": {
+            "temperature": temperature,
+            "test_ece_raw": ece_raw,
+            "test_ece_calibrated": ece_calibrated,
+        },
         "size": size,
         "latency": latency,
         "throughput_sentences_per_second": len(labels) / throughput_seconds,
         "training_seconds": training_seconds,
-        "confusion_matrix": compute_confusion_matrix(labels, predictions).tolist(),
+        "confusion_matrix": compute_confusion_matrix(
+            labels, predictions, task.id2label
+        ).tolist(),
     }
 
 
@@ -233,10 +273,11 @@ def benchmark_reference(device):
 # COMPARISON TABLE
 # ============================================================
 
-def print_comparison(results):
+def print_comparison(results, task, test_rows):
 
     print("=" * 78)
-    print("COMPARISON  -  MTEB EmotionClassification test split (1986 rows)")
+    print(f"COMPARISON  -  {task.dataset_id} test split ({test_rows} rows, "
+          f"{task.num_labels} classes)")
     print("=" * 78)
 
     header = (f"{'Model':<22} {'Params':>8} {'Disk':>8} {'Acc':>8} "
@@ -281,18 +322,56 @@ def main():
         help="Latency is reported for CPU by default, matching deployment.",
     )
 
+    parser.add_argument(
+        "--task",
+        default=DEFAULT_TASK,
+        choices=list(TASKS),
+        help="Which trained task to benchmark.",
+    )
+
+    parser.add_argument(
+        "--model",
+        default="all",
+        choices=list(MODELS) + ["all"],
+        help="Benchmark one model, or every model with a checkpoint.",
+    )
+
     arguments = parser.parse_args()
 
     ensure_directories()
 
+    task = get_task(arguments.task)
+
+    keys = list(MODELS) if arguments.model == "all" else [arguments.model]
+
+    # Skip models that were never trained for this task rather than
+    # aborting the whole run. GoEmotions is expensive on CPU, so
+    # benchmarking whichever checkpoints exist is the common case.
+    trained = [key for key in keys if task.checkpoint_path(key).exists()]
+
+    missing = [key for key in keys if key not in trained]
+
+    if missing:
+        print(f"No {task.key} checkpoint for: {', '.join(missing)}  (skipped)")
+        print(f"Train with: python train.py --task {task.key} --model <name>\n")
+
+    if not trained:
+        raise SystemExit(
+            f"No checkpoints found for task {task.key!r}. Nothing to benchmark."
+        )
+
     results = [
-        benchmark_model(key, arguments.device)
-        for key in MODELS
+        benchmark_model(key, task, arguments.device)
+        for key in trained
     ]
 
     reference = benchmark_reference(arguments.device)
 
-    print_comparison(results)
+    test_rows = int(
+        sum(entry["support"] for entry in results[0]["metrics"]["per_class"].values())
+    )
+
+    print_comparison(results, task, test_rows)
 
     fastest = min(results, key=lambda r: r["latency"]["median_ms"])
 
@@ -302,7 +381,10 @@ def main():
     print("=" * 78)
 
     payload = {
-        "dataset": "mteb/emotion (MTEB EmotionClassification)",
+        "task": task.key,
+        "dataset": task.dataset_id,
+        "labels": task.labels,
+        "description": task.description,
         "device": arguments.device,
         "torch_threads": torch.get_num_threads(),
         "bert_base_parameters": BERT_BASE_PARAMS,
@@ -310,10 +392,12 @@ def main():
         "results": results,
     }
 
-    with open(RESULTS_FILE, "w") as handle:
+    destination = task.results_file
+
+    with open(destination, "w") as handle:
         json.dump(payload, handle, indent=2)
 
-    print(f"\nWrote {RESULTS_FILE}")
+    print(f"\nWrote {destination}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,107 @@
+{
+  "data": "eval_data\\webcam",
+  "detector": "yunet",
+  "samples": 840,
+  "fitted_temperature": 2.9180095523919567,
+  "configurations": [
+    {
+      "name": "1. legacy (box + 5%)",
+      "description": "The original deployment path.",
+      "crop_mode": "legacy",
+      "tta": false,
+      "temperature": 1.0,
+      "samples": 840,
+      "detection_rate": 0.9892857142857143,
+      "mean_quality": 0.6040243904535375,
+      "accuracy": 0.35,
+      "macro_f1": 0.297366122697146,
+      "per_class_f1": {
+        "angry": 0.10714285714285712,
+        "disgust": 0.13846153846153847,
+        "fear": 0.32608695652173914,
+        "happy": 0.5666666666666667,
+        "neutral": 0.3767123287671233,
+        "sad": 0.3887147335423198,
+        "surprise": 0.1777777777777778
+      },
+      "ece": 0.23792888392396522,
+      "ms_per_image": 39.0789604762436
+    },
+    {
+      "name": "2. + aligned crop",
+      "description": "Eye-line similarity transform, IOD ratio 0.42.",
+      "crop_mode": "aligned",
+      "tta": false,
+      "temperature": 1.0,
+      "samples": 840,
+      "detection_rate": 0.9892857142857143,
+      "mean_quality": 0.5818718945196134,
+      "accuracy": 0.36666666666666664,
+      "macro_f1": 0.3368536294309985,
+      "per_class_f1": {
+        "angry": 0.12903225806451613,
+        "disgust": 0.19444444444444445,
+        "fear": 0.3273809523809524,
+        "happy": 0.6468646864686469,
+        "neutral": 0.31034482758620696,
+        "sad": 0.3932203389830508,
+        "surprise": 0.35668789808917195
+      },
+      "ece": 0.22601115738808303,
+      "ms_per_image": 37.2601996428178
+    },
+    {
+      "name": "3. + flip TTA",
+      "description": "Mean of the logits of the crop and its mirror.",
+      "crop_mode": "aligned",
+      "tta": true,
+      "temperature": 1.0,
+      "samples": 840,
+      "detection_rate": 0.9892857142857143,
+      "mean_quality": 0.5818718945196134,
+      "accuracy": 0.3619047619047619,
+      "macro_f1": 0.33266870562210077,
+      "per_class_f1": {
+        "angry": 0.14012738853503184,
+        "disgust": 0.1830985915492958,
+        "fear": 0.3273809523809524,
+        "happy": 0.6354515050167223,
+        "neutral": 0.3254237288135593,
+        "sad": 0.3754266211604096,
+        "surprise": 0.34177215189873417
+      },
+      "ece": 0.22894205333677684,
+      "ms_per_image": 47.674417976217924
+    },
+    {
+      "name": "4. + calibration",
+      "description": "Temperature scaling, T=2.918.",
+      "crop_mode": "aligned",
+      "tta": true,
+      "temperature": 2.9180095523919567,
+      "samples": 840,
+      "detection_rate": 0.9892857142857143,
+      "mean_quality": 0.5818718945196134,
+      "accuracy": 0.3619047619047619,
+      "macro_f1": 0.33266870562210077,
+      "per_class_f1": {
+        "angry": 0.14012738853503184,
+        "disgust": 0.1830985915492958,
+        "fear": 0.3273809523809524,
+        "happy": 0.6354515050167223,
+        "neutral": 0.3254237288135593,
+        "sad": 0.3754266211604096,
+        "surprise": 0.34177215189873417
+      },
+      "ece": 0.08848287464708698,
+      "ms_per_image": 47.319319761923644
+    }
+  ],
+  "smoothing_simulation": {
+    "frames_per_clip": 12,
+    "noise_sigma": 0.35,
+    "last_frame_accuracy": 0.36101083032490977,
+    "smoothed_accuracy": 0.36341756919374246,
+    "clips": 831
+  }
+}

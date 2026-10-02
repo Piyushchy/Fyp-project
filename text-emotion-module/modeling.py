@@ -12,7 +12,7 @@ import torch.nn as nn
 from safetensors.torch import load_file
 from transformers import AutoModelForSequenceClassification
 
-from config import ID2LABEL, LABEL2ID, MODELS, NUM_LABELS
+from config import ID2LABEL, LABEL2ID, MODELS, NUM_LABELS, get_task
 
 
 # ============================================================
@@ -70,17 +70,23 @@ from config import ID2LABEL, LABEL2ID, MODELS, NUM_LABELS
 NEEDS_POOLED_NORMALIZATION = {"mobilebert"}
 
 
-def adapt_classifier_head(model, model_key):
+def adapt_classifier_head(model, model_key, num_labels=None):
     """Insert a BatchNorm1d before the classifier where required."""
 
     if model_key not in NEEDS_POOLED_NORMALIZATION:
         return model
 
+    # Read the head width from the loaded config when the caller did
+    # not say, so reloading a checkpoint rebuilds the head it was
+    # saved with rather than whichever task happens to be the default.
+    if num_labels is None:
+        num_labels = int(getattr(model.config, "num_labels", NUM_LABELS))
+
     hidden_size = model.config.hidden_size
 
     model.classifier = nn.Sequential(
         nn.BatchNorm1d(hidden_size),
-        nn.Linear(hidden_size, NUM_LABELS),
+        nn.Linear(hidden_size, num_labels),
     )
 
     return model
@@ -90,17 +96,23 @@ def adapt_classifier_head(model, model_key):
 # BUILD
 # ============================================================
 
-def create_model(model_key):
-    """A pretrained backbone with a fresh classification head."""
+def create_model(model_key, task=None):
+    """A pretrained backbone with a fresh classification head.
+
+    task selects the label space. It defaults to the six-class MTEB
+    task so the original training runs reproduce exactly.
+    """
+
+    task = get_task("mteb") if task is None else task
 
     model = AutoModelForSequenceClassification.from_pretrained(
         MODELS[model_key]["hub_id"],
-        num_labels=NUM_LABELS,
-        id2label=ID2LABEL,
-        label2id=LABEL2ID,
+        num_labels=task.num_labels,
+        id2label=task.id2label,
+        label2id=task.label2id,
     )
 
-    return adapt_classifier_head(model, model_key)
+    return adapt_classifier_head(model, model_key, task.num_labels)
 
 
 def load_model(model_key, directory):
@@ -114,7 +126,7 @@ def load_model(model_key, directory):
 
     model = AutoModelForSequenceClassification.from_pretrained(directory)
 
-    adapt_classifier_head(model, model_key)
+    adapt_classifier_head(model, model_key)  # width taken from the config
 
     if model_key in NEEDS_POOLED_NORMALIZATION:
         model.load_state_dict(

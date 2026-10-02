@@ -10,6 +10,16 @@
         0.5,
         0.5
     ],
+    "temperature": 1.3588766470709546,
+    "logit_bias": [
+        -0.7714285714285716,
+        -0.12142857142857164,
+        -0.07142857142857137,
+        0.2785714285714287,
+        0.7785714285714287,
+        -0.17142857142857146,
+        0.07857142857142854
+    ],
     "id2label": {
         "0": "angry",
         "1": "disgust",
@@ -18,5 +28,55 @@
         "4": "neutral",
         "5": "sad",
         "6": "surprise"
+    },
+    "_provenance": {
+        "datasets": "FER2013 train + AffectNet + RAF-DB (77,003 images)",
+        "heldout_test": "FER2013 test (7,178 images)",
+        "test_accuracy": 0.6909,
+        "test_macro_f1": 0.6623,
+        "per_class_f1": {
+            "angry": 0.6028,
+            "disgust": 0.5837,
+            "fear": 0.5152,
+            "happy": 0.8937,
+            "neutral": 0.6585,
+            "sad": 0.5886,
+            "surprise": 0.7933
+        },
+        "ece_raw": 0.0663,
+        "ece_calibrated": 0.0387,
+        "baseline_v2": {
+            "test_accuracy": 0.744,
+            "test_macro_f1": 0.7372
+        },
+        "_warning": [
+            "The FER2013 numbers above are in-domain and are not what a",
+            "stranger at a webcam gets. On faces trained on by neither",
+            "model this checkpoint scores 0.466 accuracy / 0.457 macro-F1",
+            "with the calibration above. Quote that number, not 0.6909."
+        ]
+    },
+    "_calibration_fit": {
+        "data": "eval_data_unseen\\calib\\webcam",
+        "fit_samples": 349,
+        "report_samples": 349,
+        "heldout_uncalibrated": {
+            "accuracy": 0.42120343839541546,
+            "macro_f1": 0.38681860756754893,
+            "neutral_f1": 0.03636363636363636,
+            "mean_confidence": 0.5467739438072491
+        },
+        "heldout_temperature_only": {
+            "accuracy": 0.42120343839541546,
+            "macro_f1": 0.38681860756754893,
+            "neutral_f1": 0.03636363636363636,
+            "mean_confidence": 0.4422922380208995
+        },
+        "heldout_calibrated": {
+            "accuracy": 0.45558739255014324,
+            "macro_f1": 0.44827863331402257,
+            "neutral_f1": 0.3777777777777778,
+            "mean_confidence": 0.4039400117048154
+        }
     }
 }

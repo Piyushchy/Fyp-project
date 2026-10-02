@@ -1,0 +1,178 @@
+{
+  "task": "goemotions",
+  "dataset": "google-research-datasets/go_emotions",
+  "labels": [
+    "angry",
+    "disgust",
+    "fear",
+    "happy",
+    "neutral",
+    "sad",
+    "surprise"
+  ],
+  "description": "GoEmotions collapsed to the shared 7 via Ekman grouping.",
+  "device": "cpu",
+  "torch_threads": 10,
+  "bert_base_parameters": 109483778,
+  "bert_base_reference": {
+    "hub_id": "bert-base-uncased",
+    "parameters": 109486854,
+    "latency": {
+      "median_ms": 78.1470499932766,
+      "p95_ms": 140.41813497897238,
+      "mean_ms": 89.31702999747358
+    },
+    "trained": false
+  },
+  "results": [
+    {
+      "model_key": "tinybert",
+      "task": "goemotions",
+      "display_name": "TinyBERT (4L-312D)",
+      "hub_id": "huawei-noah/TinyBERT_General_4L_312D",
+      "note": "General distillation of BERT-base: 4 layers, 312 hidden.",
+      "labels": [
+        "angry",
+        "disgust",
+        "fear",
+        "happy",
+        "neutral",
+        "sad",
+        "surprise"
+      ],
+      "metrics": {
+        "accuracy": 0.6564009661835749,
+        "macro_precision": 0.5563609919668376,
+        "macro_recall": 0.6697541030601046,
+        "macro_f1": 0.5952431861839378,
+        "weighted_f1": 0.6567463793153587,
+        "per_class": {
+          "angry": {
+            "precision": 0.4664914586070959,
+            "recall": 0.6206293706293706,
+            "f1": 0.5326331582895724,
+            "support": 572
+          },
+          "disgust": {
+            "precision": 0.3953488372093023,
+            "recall": 0.6710526315789473,
+            "f1": 0.4975609756097561,
+            "support": 76
+          },
+          "fear": {
+            "precision": 0.5081967213114754,
+            "recall": 0.775,
+            "f1": 0.6138613861386139,
+            "support": 80
+          },
+          "happy": {
+            "precision": 0.8203883495145631,
+            "recall": 0.8164251207729468,
+            "f1": 0.8184019370460048,
+            "support": 1863
+          },
+          "neutral": {
+            "precision": 0.706717123935667,
+            "recall": 0.4651307596513076,
+            "f1": 0.5610214044310927,
+            "support": 1606
+          },
+          "sad": {
+            "precision": 0.48633879781420764,
+            "recall": 0.6289752650176679,
+            "f1": 0.5485362095531587,
+            "support": 283
+          },
+          "surprise": {
+            "precision": 0.5110456553755522,
+            "recall": 0.7110655737704918,
+            "f1": 0.5946872322193659,
+            "support": 488
+          }
+        }
+      },
+      "calibration": {
+        "temperature": 1.1979863416891345,
+        "test_ece_raw": 0.09924909503059688,
+        "test_ece_calibrated": 0.0500565335040555
+      },
+      "size": {
+        "parameters": 14352439,
+        "disk_mb": 54.75813674926758,
+        "smaller_than_bert_base": 7.62823503378067
+      },
+      "latency": {
+        "median_ms": 20.752949989400804,
+        "p95_ms": 268.8838450354524,
+        "mean_ms": 47.58911000099033
+      },
+      "throughput_sentences_per_second": 199.28546133635976,
+      "training_seconds": 1752.794385433197,
+      "confusion_matrix": [
+        [
+          355,
+          33,
+          6,
+          31,
+          70,
+          42,
+          35
+        ],
+        [
+          11,
+          51,
+          2,
+          2,
+          4,
+          4,
+          2
+        ],
+        [
+          1,
+          4,
+          62,
+          3,
+          0,
+          7,
+          3
+        ],
+        [
+          59,
+          8,
+          11,
+          1521,
+          165,
+          45,
+          54
+        ],
+        [
+          271,
+          20,
+          24,
+          247,
+          747,
+          75,
+          222
+        ],
+        [
+          37,
+          7,
+          11,
+          15,
+          19,
+          178,
+          16
+        ],
+        [
+          27,
+          6,
+          6,
+          35,
+          52,
+          15,
+          347
+        ]
+      ]
+    }
+  ]
+}

@@ -25,16 +25,19 @@ import torch.nn as nn
 from torch.optim import AdamW
 from transformers import AutoTokenizer, get_linear_schedule_with_warmup
 
+from calibration import fit_temperature
 from config import (
+    DEFAULT_TASK,
     MAX_GRAD_NORM,
     MODELS,
     SEED,
+    TASKS,
     WARMUP_RATIO,
     WEIGHT_DECAY,
-    checkpoint_path,
     ensure_directories,
+    get_task,
 )
-from data import build_dataloaders, class_weights
+from data import build_task_dataloaders, task_class_weights
 from metrics import compute_metrics
 from modeling import create_model, load_model
 
@@ -56,12 +59,18 @@ def set_seed(seed):
 # ============================================================
 
 @torch.no_grad()
-def evaluate(model, loader, device):
-    """Run the model over a loader and return (metrics, predictions, labels)."""
+def evaluate(model, loader, device, task):
+    """Run the model over a loader.
+
+    Returns (metrics, predictions, labels, logits). The raw logits come
+    back too because temperature calibration needs them, and running a
+    second full pass just to collect them would double the cost of
+    every epoch for no reason.
+    """
 
     model.eval()
 
-    all_predictions = []
+    all_logits = []
     all_labels = []
 
     for input_ids, attention_mask, labels in loader:
@@ -71,39 +80,49 @@ def evaluate(model, loader, device):
             attention_mask=attention_mask.to(device),
         ).logits
 
-        all_predictions.append(logits.argmax(dim=-1).cpu().numpy())
+        all_logits.append(logits.float().cpu().numpy())
         all_labels.append(labels.numpy())
 
-    predictions = np.concatenate(all_predictions)
+    logits = np.concatenate(all_logits)
     labels = np.concatenate(all_labels)
 
-    return compute_metrics(labels, predictions), predictions, labels
+    predictions = logits.argmax(axis=-1)
+
+    return (
+        compute_metrics(labels, predictions, task.id2label),
+        predictions,
+        labels,
+        logits,
+    )
 
 
 # ============================================================
 # TRAIN ONE MODEL
 # ============================================================
 
-def train_model(model_key, max_train_samples=None, device="cpu"):
+def train_model(model_key, task, max_train_samples=None, device="cpu"):
 
     settings = MODELS[model_key]
 
     print("=" * 60)
     print(f"TRAINING  {settings['display_name']}")
-    print(f"Checkpoint {settings['hub_id']}")
+    print(f"Backbone  {settings['hub_id']}")
+    print(f"Task      {task.key}  ({task.num_labels} classes)")
+    print(f"Dataset   {task.dataset_id}")
     print("=" * 60)
 
     set_seed(SEED)
 
     tokenizer = AutoTokenizer.from_pretrained(settings["hub_id"])
 
-    model = create_model(model_key).to(device)
+    model = create_model(model_key, task).to(device)
 
     parameter_count = sum(p.numel() for p in model.parameters())
 
     print(f"Parameters {parameter_count/1e6:.1f}M")
 
-    train_loader, validation_loader, test_loader = build_dataloaders(
+    train_loader, validation_loader, test_loader = build_task_dataloaders(
+        task,
         tokenizer,
         settings["batch_size"],
         settings["max_length"],
@@ -148,7 +167,7 @@ def train_model(model_key, max_train_samples=None, device="cpu"):
     )
 
     loss_function = nn.CrossEntropyLoss(
-        weight=class_weights(train_loader).to(device)
+        weight=task_class_weights(train_loader, task.num_labels).to(device)
     )
 
     # --------------------------------------------------------
@@ -195,7 +214,9 @@ def train_model(model_key, max_train_samples=None, device="cpu"):
                       f"{elapsed/step:.2f}s/step",
                       flush=True)
 
-        validation_metrics, _, _ = evaluate(model, validation_loader, device)
+        validation_metrics, _, _, _ = evaluate(
+            model, validation_loader, device, task
+        )
 
         print(f"  epoch {epoch} validation  "
               f"accuracy {validation_metrics['accuracy']:.4f}  "
@@ -209,14 +230,15 @@ def train_model(model_key, max_train_samples=None, device="cpu"):
             "validation_macro_f1": validation_metrics["macro_f1"],
         })
 
-        # Keep the best epoch by macro-F1, not accuracy. Accuracy
-        # is dominated by 'joy' and 'sadness' (63% of the data)
-        # and would hide collapse on the rare classes.
+        # Keep the best epoch by macro-F1, not accuracy. On MTEB
+        # accuracy is dominated by 'joy' and 'sadness' (63% of the
+        # data); on GoEmotions by 'happy' and 'neutral' (71%). Either
+        # way accuracy would hide collapse on the rare classes.
         if validation_metrics["macro_f1"] > best_macro_f1:
 
             best_macro_f1 = validation_metrics["macro_f1"]
 
-            destination = checkpoint_path(model_key)
+            destination = task.checkpoint_path(model_key)
             destination.mkdir(parents=True, exist_ok=True)
 
             model.save_pretrained(destination)
@@ -231,15 +253,44 @@ def train_model(model_key, max_train_samples=None, device="cpu"):
     # TEST THE BEST CHECKPOINT
     # --------------------------------------------------------
 
-    best_model = load_model(model_key, checkpoint_path(model_key)).to(device)
+    best_model = load_model(model_key, task.checkpoint_path(model_key)).to(device)
 
-    test_metrics, predictions, labels = evaluate(best_model, test_loader, device)
+    test_metrics, predictions, labels, _ = evaluate(
+        best_model, test_loader, device, task
+    )
 
     print(f"\nTEST  accuracy {test_metrics['accuracy']:.4f}  "
-          f"macro-F1 {test_metrics['macro_f1']:.4f}\n")
+          f"macro-F1 {test_metrics['macro_f1']:.4f}")
+
+    # --------------------------------------------------------
+    # CALIBRATION
+    # --------------------------------------------------------
+    #
+    # Fitted on validation, never on test. The class-weighted loss
+    # above deliberately distorts the decision boundary toward the
+    # rare classes, and that leaves the probabilities miscalibrated as
+    # a side effect. Fusion consumes those probabilities directly, so
+    # an overconfident modality would win arguments it has not earned.
+
+    _, _, validation_labels, validation_logits = evaluate(
+        best_model, validation_loader, device, task
+    )
+
+    temperature, ece_before, ece_after = fit_temperature(
+        validation_logits, validation_labels
+    )
+
+    print(f"CALIBRATION  temperature {temperature:.3f}  "
+          f"ECE {ece_before:.4f} -> {ece_after:.4f}\n")
 
     record = {
         "model_key": model_key,
+        "task": task.key,
+        "dataset_id": task.dataset_id,
+        "labels": task.labels,
+        "temperature": temperature,
+        "ece_before": ece_before,
+        "ece_after": ece_after,
         "hub_id": settings["hub_id"],
         "display_name": settings["display_name"],
         "parameters": parameter_count,
@@ -254,13 +305,27 @@ def train_model(model_key, max_train_samples=None, device="cpu"):
         "test": test_metrics,
     }
 
-    summary_path = checkpoint_path(model_key) / "training_summary.json"
+    destination = task.checkpoint_path(model_key)
 
-    with open(summary_path, "w") as handle:
+    with open(destination / "training_summary.json", "w") as handle:
         json.dump(record, handle, indent=2)
 
-    np.save(checkpoint_path(model_key) / "test_predictions.npy", predictions)
-    np.save(checkpoint_path(model_key) / "test_labels.npy", labels)
+    # Stored beside the weights so predict.py and the server can apply
+    # the same temperature without re-deriving it.
+    with open(destination / "calibration.json", "w") as handle:
+        json.dump(
+            {
+                "temperature": temperature,
+                "ece_before": ece_before,
+                "ece_after": ece_after,
+                "fitted_on": "validation",
+            },
+            handle,
+            indent=2,
+        )
+
+    np.save(destination / "test_predictions.npy", predictions)
+    np.save(destination / "test_labels.npy", labels)
 
     return record
 
@@ -281,6 +346,17 @@ def main():
     )
 
     parser.add_argument(
+        "--task",
+        default=DEFAULT_TASK,
+        choices=list(TASKS),
+        help=(
+            "Which dataset and label space. 'goemotions' is the 7-class "
+            "space the fusion module consumes; 'mteb' is the original "
+            "6-class architecture comparison."
+        ),
+    )
+
+    parser.add_argument(
         "--max-train-samples",
         type=int,
         default=None,
@@ -296,12 +372,17 @@ def main():
 
     ensure_directories()
 
+    task = get_task(arguments.task)
+
     keys = list(MODELS) if arguments.model == "all" else [arguments.model]
 
     for key in keys:
-        train_model(key, arguments.max_train_samples, arguments.device)
+        train_model(key, task, arguments.max_train_samples, arguments.device)
 
-    print("Training complete. Run 'python benchmark.py' to compare.")
+    print(
+        f"Training complete. Run 'python benchmark.py --task {task.key}' "
+        f"to compare."
+    )
 
 
 if __name__ == "__main__":

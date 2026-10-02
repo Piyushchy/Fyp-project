@@ -1,0 +1,82 @@
+{
+    "image_size": 224,
+    "mean": [
+        0.5,
+        0.5,
+        0.5
+    ],
+    "std": [
+        0.5,
+        0.5,
+        0.5
+    ],
+    "id2label": {
+        "0": "angry",
+        "1": "disgust",
+        "2": "fear",
+        "3": "happy",
+        "4": "neutral",
+        "5": "sad",
+        "6": "surprise"
+    },
+    "temperature": 3.351184218253669,
+    "logit_bias": [
+        -0.20000000000000007,
+        0.7999999999999999,
+        -0.45000000000000007,
+        -0.1499999999999998,
+        1.249000902703301e-16,
+        -0.30000000000000016,
+        0.29999999999999993
+    ],
+    "_calibration": {
+        "_comment": [
+            "Fitted the same way as v3's: on eval_data_unseen at the",
+            "retuned crop geometry, reported on a disjoint half. The",
+            "previous 2.918 came from eval_face.py, which at the time ran",
+            "the v2 weights but loaded and wrote emotion_config.json -",
+            "v3's file - so the two models' calibration had been crossed.",
+            "v2 needs a much larger temperature than v3 because it is the",
+            "more overconfident of the two off its training distribution."
+        ],
+        "fitted_on": "eval_data_unseen (JasonChen0317/FacialExpressions), clean+webcam, 1390 faces",
+        "heldout": {
+            "before": {
+                "_setting": "T=0.7664, no bias, margin 0.05",
+                "accuracy": 0.308,
+                "macro_f1": 0.232,
+                "neutral_f1": 0.148
+            },
+            "after": {
+                "_setting": "T=4.00, logit_bias, margin 0.25",
+                "accuracy": 0.331,
+                "macro_f1": 0.315,
+                "neutral_f1": 0.314
+            }
+        },
+        "_note": "Calibrated v2 is materially weaker than calibrated v3 (0.331 vs 0.466 accuracy, 0.315 vs 0.457 macro-F1) on the same unseen faces. v2 is kept selectable via EMOTION_MODEL=v2, not as the default."
+    },
+    "_calibration_fit": {
+        "data": "eval_data_unseen\\calib\\webcam",
+        "fit_samples": 349,
+        "report_samples": 349,
+        "heldout_uncalibrated": {
+            "accuracy": 0.3237822349570201,
+            "macro_f1": 0.26197219623025314,
+            "neutral_f1": 0.061538461538461535,
+            "mean_confidence": 0.516943790538969
+        },
+        "heldout_temperature_only": {
+            "accuracy": 0.3237822349570201,
+            "macro_f1": 0.26197219623025314,
+            "neutral_f1": 0.061538461538461535,
+            "mean_confidence": 0.26119994931341184
+        },
+        "heldout_calibrated": {
+            "accuracy": 0.31805157593123207,
+            "macro_f1": 0.3129699792465247,
+            "neutral_f1": 0.27659574468085113,
+            "mean_confidence": 0.23772395589845574
+        }
+    }
+}

@@ -18,7 +18,16 @@ import torch
 from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset
 
-from config import DATASET_ID, ID2LABEL, NUM_LABELS, SEED
+from config import (
+    DATASET_ID,
+    GOEMOTIONS_CONFIG,
+    GOEMOTIONS_DATASET_ID,
+    GOEMOTIONS_ID_TO_SHARED_ID,
+    GOEMOTIONS_LABELS,
+    ID2LABEL,
+    NUM_LABELS,
+    SEED,
+)
 
 
 # ============================================================
@@ -162,6 +171,168 @@ def class_weights(loader):
     counts[counts == 0] = 1.0
 
     weights = counts.sum() / (NUM_LABELS * counts)
+
+    return torch.tensor(weights, dtype=torch.float32)
+
+
+# ============================================================
+# GOEMOTIONS
+# ============================================================
+#
+# GoEmotions is multi-label: a comment can carry several of the
+# 28 fine-grained emotions at once. Collapsing to the Ekman
+# seven resolves most of that, because the co-occurring labels
+# are usually near-synonyms that land in the same group -
+# "admiration" with "gratitude", or "anger" with "annoyance".
+#
+# What it does not resolve is genuine mixed affect: a comment
+# tagged both "sadness" and "amusement" maps to two different
+# shared classes and has no single correct answer. Those rows
+# are dropped rather than forced, for two reasons. Assigning one
+# arbitrarily teaches the model that the other is wrong, and
+# keeping them would make the reported accuracy depend on a
+# tie-break rule rather than on the model. The count that
+# survives is printed, so the cost is visible rather than
+# hidden.
+# ============================================================
+
+def _to_shared_label(fine_label_ids):
+    """Collapse one row's GoEmotions ids to a single shared id.
+
+    Returns None when the row maps to more than one shared class,
+    i.e. when it expresses genuinely mixed affect.
+    """
+
+    shared = {
+        GOEMOTIONS_ID_TO_SHARED_ID[int(index)]
+        for index in fine_label_ids
+    }
+
+    if len(shared) != 1:
+        return None
+
+    return shared.pop()
+
+
+def load_goemotions_splits(verbose=True):
+    """Load GoEmotions and project it onto the shared seven classes."""
+
+    dataset = load_dataset(GOEMOTIONS_DATASET_ID, GOEMOTIONS_CONFIG)
+
+    # Same guard as load_splits(): the grouping in config.py is
+    # keyed on integer ids, so a reordering upstream would
+    # silently relabel the whole dataset.
+    observed = tuple(dataset["train"].features["labels"].feature.names)
+
+    assert observed == GOEMOTIONS_LABELS, (
+        f"Upstream GoEmotions label order changed.\n"
+        f"  expected {GOEMOTIONS_LABELS}\n"
+        f"  observed {observed}\n"
+        f"Update GOEMOTIONS_LABELS in config.py."
+    )
+
+    projected = {}
+
+    for split_name, split in dataset.items():
+
+        shared_labels = [_to_shared_label(row) for row in split["labels"]]
+
+        keep = [index for index, value in enumerate(shared_labels) if value is not None]
+
+        projected[split_name] = split.select(keep).remove_columns(
+            [name for name in split.column_names if name != "text"]
+        ).add_column("label", [shared_labels[index] for index in keep])
+
+        if verbose:
+            dropped = len(split) - len(keep)
+            print(
+                f"  {split_name:<11} {len(keep):>6} rows kept, "
+                f"{dropped:>5} dropped as mixed affect "
+                f"({dropped / max(len(split), 1) * 100:.1f}%)"
+            )
+
+    return projected
+
+
+# ============================================================
+# TASK-AWARE LOADING
+# ============================================================
+
+
+def load_task_splits(task, verbose=True):
+    """Return {split_name: dataset} for either task.
+
+    Both paths end with the same two columns - 'text' and an
+    integer 'label' in the task label space - so everything
+    downstream is task-agnostic.
+    """
+
+    if task.key == "goemotions":
+        return load_goemotions_splits(verbose=verbose)
+
+    return load_splits()
+
+
+def build_task_dataloaders(
+    task,
+    tokenizer,
+    batch_size,
+    max_length,
+    max_train_samples=None,
+    verbose=True,
+):
+    """Train / validation / test loaders for one task and tokenizer."""
+
+    dataset = load_task_splits(task, verbose=verbose)
+
+    train_split = dataset["train"]
+
+    if max_train_samples is not None and max_train_samples < len(train_split):
+        train_split = train_split.shuffle(seed=SEED).select(range(max_train_samples))
+
+    generator = torch.Generator()
+    generator.manual_seed(SEED)
+
+    pad = partial(collate, pad_token_id=tokenizer.pad_token_id)
+
+    train_loader = DataLoader(
+        encode_split(train_split, tokenizer, max_length),
+        batch_size=batch_size,
+        shuffle=True,
+        generator=generator,
+        collate_fn=pad,
+    )
+
+    validation_loader = DataLoader(
+        encode_split(dataset["validation"], tokenizer, max_length),
+        batch_size=batch_size,
+        collate_fn=pad,
+    )
+
+    test_loader = DataLoader(
+        encode_split(dataset["test"], tokenizer, max_length),
+        batch_size=batch_size,
+        collate_fn=pad,
+    )
+
+    return train_loader, validation_loader, test_loader
+
+
+def task_class_weights(loader, num_labels):
+    """Inverse-frequency weights for the cross-entropy loss.
+
+    The same idea as class_weights() but for an arbitrary label
+    count. It matters more on GoEmotions than on MTEB: 'neutral'
+    is roughly a third of the corpus while 'disgust' is under
+    2%, so an unweighted loss would learn to answer 'neutral'
+    and still score respectably on accuracy.
+    """
+
+    counts = np.bincount(loader.dataset.labels, minlength=num_labels).astype(np.float64)
+
+    counts[counts == 0] = 1.0
+
+    weights = counts.sum() / (num_labels * counts)
 
     return torch.tensor(weights, dtype=torch.float32)
 

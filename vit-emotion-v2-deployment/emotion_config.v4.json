@@ -1,0 +1,100 @@
+{
+    "image_size": 224,
+    "mean": [
+        0.5,
+        0.5,
+        0.5
+    ],
+    "std": [
+        0.5,
+        0.5,
+        0.5
+    ],
+    "temperature": 1.2295450251052473,
+    "id2label": {
+        "0": "angry",
+        "1": "disgust",
+        "2": "fear",
+        "3": "happy",
+        "4": "neutral",
+        "5": "sad",
+        "6": "surprise"
+    },
+    "_provenance": {
+        "base_model": "google/vit-base-patch16-224-in21k",
+        "datasets": "FER2013 train + AffectNet + RAF-DB",
+        "train_images": 98937,
+        "epochs": 4,
+        "training_seconds": 4310.1,
+        "heldout_test": "FER2013 test",
+        "test_accuracy": 0.6824,
+        "test_macro_f1": 0.6556,
+        "per_class_f1": {
+            "angry": 0.6337,
+            "disgust": 0.6041,
+            "fear": 0.4691,
+            "happy": 0.8977,
+            "neutral": 0.6173,
+            "sad": 0.5636,
+            "surprise": 0.8038
+        },
+        "history": [
+            {
+                "epoch": 1,
+                "loss": 1.5022072712606074,
+                "val_accuracy": 0.7136876380974532,
+                "val_macro_f1": 0.6433220898369572
+            },
+            {
+                "epoch": 2,
+                "loss": 1.2490019657510802,
+                "val_accuracy": 0.7449703453889988,
+                "val_macro_f1": 0.6891496466702293
+            },
+            {
+                "epoch": 3,
+                "loss": 1.173660969394806,
+                "val_accuracy": 0.7753227119432492,
+                "val_macro_f1": 0.7189095337016448
+            },
+            {
+                "epoch": 4,
+                "loss": 1.127119692040662,
+                "val_accuracy": 0.7716013489940691,
+                "val_macro_f1": 0.7183597284787632
+            }
+        ]
+    },
+    "logit_bias": [
+        -0.4500000000000001,
+        0.14999999999999997,
+        -0.04999999999999976,
+        0.10000000000000014,
+        0.39999999999999997,
+        -0.20000000000000012,
+        0.049999999999999885
+    ],
+    "_calibration_fit": {
+        "data": "eval_data_unseen\\calib\\webcam",
+        "fit_samples": 349,
+        "report_samples": 349,
+        "heldout_uncalibrated": {
+            "accuracy": 0.4068767908309456,
+            "macro_f1": 0.3789668544047461,
+            "neutral_f1": 0.3181818181818182,
+            "mean_confidence": 0.5216895438745232
+        },
+        "heldout_temperature_only": {
+            "accuracy": 0.4068767908309456,
+            "macro_f1": 0.3789668544047461,
+            "neutral_f1": 0.3181818181818182,
+            "mean_confidence": 0.4522169754287776
+        },
+        "heldout_calibrated": {
+            "accuracy": 0.41260744985673353,
+            "macro_f1": 0.3940895712497885,
+            "neutral_f1": 0.35398230088495575,
+            "mean_confidence": 0.44208926125292447
+        }
+    }
+}

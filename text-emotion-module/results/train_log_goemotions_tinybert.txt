@@ -1,0 +1,176 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+============================================================
+TRAINING  TinyBERT (4L-312D)
+Backbone  huawei-noah/TinyBERT_General_4L_312D
+Task      goemotions  (7 classes)
+Dataset   google-research-datasets/go_emotions
+============================================================
+Loading weights:   0%|          | 0/71 [00:00<?, ?it/s]Loading weights: 100%|##########| 71/71 [00:00<00:00, 29209.96it/s]
+[transformers] [1mBertForSequenceClassification LOAD REPORT[0m from: huawei-noah/TinyBERT_General_4L_312D
+Key                                        | Status     | 
+-------------------------------------------+------------+-
+fit_denses.{0, 1, 2, 3, 4}.bias            | UNEXPECTED | 
+cls.predictions.bias                       | UNEXPECTED | 
+cls.predictions.transform.dense.weight     | UNEXPECTED | 
+cls.predictions.transform.dense.bias       | UNEXPECTED | 
+cls.predictions.transform.LayerNorm.weight | UNEXPECTED | 
+fit_denses.{0, 1, 2, 3, 4}.weight          | UNEXPECTED | 
+cls.seq_relationship.weight                | UNEXPECTED | 
+cls.predictions.decoder.weight             | UNEXPECTED | 
+cls.seq_relationship.bias                  | UNEXPECTED | 
+cls.predictions.transform.LayerNorm.bias   | UNEXPECTED | 
+classifier.bias                            | MISSING    | 
+classifier.weight                          | MISSING    | 
+
+Notes:
+- UNEXPECTED:	can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+Parameters 14.4M
+  train        39555 rows kept,  3855 dropped as mixed affect (8.9%)
+  validation    4946 rows kept,   480 dropped as mixed affect (8.8%)
+  test          4968 rows kept,   459 dropped as mixed affect (8.5%)
+Train batches 1237  Val batches 155  Test batches 156
+  epoch 1  step 50/1237  loss 1.9447  0.25s/step
+  epoch 1  step 100/1237  loss 1.9431  0.26s/step
+  epoch 1  step 150/1237  loss 1.9338  0.26s/step
+  epoch 1  step 200/1237  loss 1.9172  0.26s/step
+  epoch 1  step 250/1237  loss 1.8933  0.25s/step
+  epoch 1  step 300/1237  loss 1.8727  0.25s/step
+  epoch 1  step 350/1237  loss 1.8504  0.25s/step
+  epoch 1  step 400/1237  loss 1.8281  0.25s/step
+  epoch 1  step 450/1237  loss 1.8069  0.25s/step
+  epoch 1  step 500/1237  loss 1.7825  0.25s/step
+  epoch 1  step 550/1237  loss 1.7537  0.25s/step
+  epoch 1  step 600/1237  loss 1.7315  0.25s/step
+  epoch 1  step 650/1237  loss 1.7041  0.25s/step
+  epoch 1  step 700/1237  loss 1.6825  0.26s/step
+  epoch 1  step 750/1237  loss 1.6607  0.26s/step
+  epoch 1  step 800/1237  loss 1.6437  0.26s/step
+  epoch 1  step 850/1237  loss 1.6282  0.26s/step
+  epoch 1  step 900/1237  loss 1.6129  0.26s/step
+  epoch 1  step 950/1237  loss 1.5981  0.26s/step
+  epoch 1  step 1000/1237  loss 1.5822  0.26s/step
+  epoch 1  step 1050/1237  loss 1.5692  0.26s/step
+  epoch 1  step 1100/1237  loss 1.5546  0.26s/step
+  epoch 1  step 1150/1237  loss 1.5408  0.26s/step
+  epoch 1  step 1200/1237  loss 1.5272  0.26s/step
+  epoch 1  step 1237/1237  loss 1.5144  0.26s/step
+  epoch 1 validation  accuracy 0.6156  macro-F1 0.5511
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 28.73it/s]
+  saved checkpoint (best macro-F1 0.5511)
+  epoch 2  step 50/1237  loss 1.1714  0.25s/step
+  epoch 2  step 100/1237  loss 1.1263  0.25s/step
+  epoch 2  step 150/1237  loss 1.1023  0.25s/step
+  epoch 2  step 200/1237  loss 1.0985  0.25s/step
+  epoch 2  step 250/1237  loss 1.0921  0.25s/step
+  epoch 2  step 300/1237  loss 1.0846  0.25s/step
+  epoch 2  step 350/1237  loss 1.0815  0.25s/step
+  epoch 2  step 400/1237  loss 1.0825  0.25s/step
+  epoch 2  step 450/1237  loss 1.0896  0.26s/step
+  epoch 2  step 500/1237  loss 1.0875  0.26s/step
+  epoch 2  step 550/1237  loss 1.0861  0.26s/step
+  epoch 2  step 600/1237  loss 1.0941  0.26s/step
+  epoch 2  step 650/1237  loss 1.0869  0.26s/step
+  epoch 2  step 700/1237  loss 1.0792  0.26s/step
+  epoch 2  step 750/1237  loss 1.0803  0.26s/step
+  epoch 2  step 800/1237  loss 1.0792  0.26s/step
+  epoch 2  step 850/1237  loss 1.0742  0.26s/step
+  epoch 2  step 900/1237  loss 1.0717  0.26s/step
+  epoch 2  step 950/1237  loss 1.0664  0.26s/step
+  epoch 2  step 1000/1237  loss 1.0662  0.26s/step
+  epoch 2  step 1050/1237  loss 1.0595  0.26s/step
+  epoch 2  step 1100/1237  loss 1.0592  0.26s/step
+  epoch 2  step 1150/1237  loss 1.0564  0.26s/step
+  epoch 2  step 1200/1237  loss 1.0573  0.26s/step
+  epoch 2  step 1237/1237  loss 1.0529  0.27s/step
+  epoch 2 validation  accuracy 0.6322  macro-F1 0.5664
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 23.49it/s]
+  saved checkpoint (best macro-F1 0.5664)
+  epoch 3  step 50/1237  loss 0.9391  0.42s/step
+  epoch 3  step 100/1237  loss 0.9442  0.39s/step
+  epoch 3  step 150/1237  loss 0.9461  0.34s/step
+  epoch 3  step 200/1237  loss 0.9317  0.31s/step
+  epoch 3  step 250/1237  loss 0.9474  0.30s/step
+  epoch 3  step 300/1237  loss 0.9458  0.28s/step
+  epoch 3  step 350/1237  loss 0.9454  0.28s/step
+  epoch 3  step 400/1237  loss 0.9425  0.28s/step
+  epoch 3  step 450/1237  loss 0.9418  0.28s/step
+  epoch 3  step 500/1237  loss 0.9415  0.28s/step
+  epoch 3  step 550/1237  loss 0.9297  0.28s/step
+  epoch 3  step 600/1237  loss 0.9284  0.28s/step
+  epoch 3  step 650/1237  loss 0.9228  0.27s/step
+  epoch 3  step 700/1237  loss 0.9213  0.27s/step
+  epoch 3  step 750/1237  loss 0.9137  0.27s/step
+  epoch 3  step 800/1237  loss 0.9141  0.27s/step
+  epoch 3  step 850/1237  loss 0.9230  0.27s/step
+  epoch 3  step 900/1237  loss 0.9196  0.27s/step
+  epoch 3  step 950/1237  loss 0.9162  0.27s/step
+  epoch 3  step 1000/1237  loss 0.9157  0.27s/step
+  epoch 3  step 1050/1237  loss 0.9165  0.27s/step
+  epoch 3  step 1100/1237  loss 0.9139  0.27s/step
+  epoch 3  step 1150/1237  loss 0.9149  0.27s/step
+  epoch 3  step 1200/1237  loss 0.9150  0.27s/step
+  epoch 3  step 1237/1237  loss 0.9138  0.26s/step
+  epoch 3 validation  accuracy 0.6537  macro-F1 0.5667
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 28.15it/s]
+  saved checkpoint (best macro-F1 0.5667)
+  epoch 4  step 50/1237  loss 0.7636  0.27s/step
+  epoch 4  step 100/1237  loss 0.7909  0.27s/step
+  epoch 4  step 150/1237  loss 0.7886  0.26s/step
+  epoch 4  step 200/1237  loss 0.7994  0.26s/step
+  epoch 4  step 250/1237  loss 0.8055  0.26s/step
+  epoch 4  step 300/1237  loss 0.8073  0.26s/step
+  epoch 4  step 350/1237  loss 0.8171  0.26s/step
+  epoch 4  step 400/1237  loss 0.8307  0.26s/step
+  epoch 4  step 450/1237  loss 0.8305  0.26s/step
+  epoch 4  step 500/1237  loss 0.8261  0.26s/step
+  epoch 4  step 550/1237  loss 0.8235  0.26s/step
+  epoch 4  step 600/1237  loss 0.8290  0.26s/step
+  epoch 4  step 650/1237  loss 0.8243  0.26s/step
+  epoch 4  step 700/1237  loss 0.8194  0.26s/step
+  epoch 4  step 750/1237  loss 0.8186  0.26s/step
+  epoch 4  step 800/1237  loss 0.8190  0.26s/step
+  epoch 4  step 850/1237  loss 0.8188  0.26s/step
+  epoch 4  step 900/1237  loss 0.8133  0.26s/step
+  epoch 4  step 950/1237  loss 0.8113  0.26s/step
+  epoch 4  step 1000/1237  loss 0.8128  0.26s/step
+  epoch 4  step 1050/1237  loss 0.8104  0.26s/step
+  epoch 4  step 1100/1237  loss 0.8082  0.25s/step
+  epoch 4  step 1150/1237  loss 0.8080  0.25s/step
+  epoch 4  step 1200/1237  loss 0.8036  0.25s/step
+  epoch 4  step 1237/1237  loss 0.8006  0.25s/step
+  epoch 4 validation  accuracy 0.6753  macro-F1 0.6052
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00, 30.79it/s]
+  saved checkpoint (best macro-F1 0.6052)
+  epoch 5  step 50/1237  loss 0.8522  0.24s/step
+  epoch 5  step 100/1237  loss 0.7482  0.25s/step
+  epoch 5  step 150/1237  loss 0.7513  0.26s/step
+  epoch 5  step 200/1237  loss 0.7494  0.26s/step
+  epoch 5  step 250/1237  loss 0.7378  0.26s/step
+  epoch 5  step 300/1237  loss 0.7375  0.26s/step
+  epoch 5  step 350/1237  loss 0.7389  0.25s/step
+  epoch 5  step 400/1237  loss 0.7303  0.25s/step
+  epoch 5  step 450/1237  loss 0.7282  0.25s/step
+  epoch 5  step 500/1237  loss 0.7319  0.25s/step
+  epoch 5  step 550/1237  loss 0.7291  0.25s/step
+  epoch 5  step 600/1237  loss 0.7331  0.25s/step
+  epoch 5  step 650/1237  loss 0.7239  0.26s/step
+  epoch 5  step 700/1237  loss 0.7168  0.26s/step
+  epoch 5  step 750/1237  loss 0.7135  0.26s/step
+  epoch 5  step 800/1237  loss 0.7144  0.25s/step
+  epoch 5  step 850/1237  loss 0.7135  0.25s/step
+  epoch 5  step 900/1237  loss 0.7106  0.25s/step
+  epoch 5  step 950/1237  loss 0.7110  0.25s/step
+  epoch 5  step 1000/1237  loss 0.7121  0.25s/step
+  epoch 5  step 1050/1237  loss 0.7133  0.25s/step
+  epoch 5  step 1100/1237  loss 0.7142  0.25s/step
+  epoch 5  step 1150/1237  loss 0.7129  0.27s/step
+  epoch 5  step 1200/1237  loss 0.7140  0.30s/step
+  epoch 5  step 1237/1237  loss 0.7166  0.31s/step
+  epoch 5 validation  accuracy 0.6642  macro-F1 0.5848
+Loading weights:   0%|          | 0/73 [00:00<?, ?it/s]Loading weights: 100%|##########| 73/73 [00:00<00:00, 5317.91it/s]
+
+TEST  accuracy 0.6564  macro-F1 0.5952
+CALIBRATION  temperature 1.198  ECE 0.0824 -> 0.0386
+
+Training complete. Run 'python benchmark.py --task goemotions' to compare.

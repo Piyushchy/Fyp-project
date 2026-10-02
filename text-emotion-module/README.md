@@ -1,4 +1,4 @@
-# Text Emotion Module (MTEB)
+# Text Emotion Module
 
 Contextual emotion understanding from text, without the transformer bloat.
 
@@ -7,8 +7,24 @@ This is the **text modality** of the multimodal emotion recognition system. The
 actually says. Both emit a label and a confidence, so the fusion stage can
 consume them the same way.
 
-Three compact transformers are fine-tuned and compared on the **MTEB
-EmotionClassification** dataset: **TinyBERT**, **DistilBERT** and **MobileBERT**.
+## Two tasks
+
+The module trains on either of two datasets, selected with `--task`:
+
+| Task | Dataset | Classes | Role |
+|---|---|---|---|
+| `mteb` | MTEB EmotionClassification | 6 | The **architecture comparison**: TinyBERT vs DistilBERT vs MobileBERT, on a clean benchmark |
+| `goemotions` | GoEmotions, Ekman-grouped | **7** | The **deployed model**: predicts directly in the shared space the fusion stage uses |
+
+Most of this README documents the MTEB study, which is unchanged and still the
+three-way comparison the project is built on. The GoEmotions task was added
+because the six-class label space cannot express `neutral` or `disgust` — see
+[The seven-class task](#the-seven-class-task-goemotions).
+
+```bash
+python train.py --task goemotions --model tinybert    # what the server loads
+python train.py --task mteb --model all               # the comparison study
+```
 
 ## Why these three, and not BERT-base or RoBERTa
 
@@ -287,9 +303,8 @@ harmless after fusion.
                      Final Emotion
 ```
 
-The visual module predicts 7 classes; this module predicts 6. They do not line
-up, so `config.py` defines an explicit bridge onto the shared vocabulary the
-fusion stage uses:
+The visual module predicts 7 classes. The MTEB task predicts 6, and they do not
+line up, so `config.py` defines an explicit bridge onto the shared vocabulary:
 
 | Text label (MTEB) | Shared label |
 |---|---|
@@ -300,34 +315,126 @@ fusion stage uses:
 | fear | fear |
 | surprise | surprise |
 
-Two things worth being explicit about:
+Two consequences, and they are the reason the GoEmotions task exists:
 
 - **`love` folds into `happy`.** The visual label set has no affection class, so
-  the distinction cannot survive fusion. If the fusion stage ever needs it, the
-  text module is the only modality that can supply it.
+  the distinction cannot survive fusion.
 - **`disgust` and `neutral` are visual-only.** MTEB emotion has no equivalent, so
-  the text module never votes for either. The fusion stage must not treat the
-  absence of a text vote for `neutral` as evidence against it.
+  a six-class model never votes for either. Since most typed messages in a live
+  session are affectively neutral, that is not a minor gap — it means the model
+  asserts an emotion on every neutral sentence, having no way to say "nothing in
+  particular".
+
+`predict.py` still projects the six-class models through this bridge, and
+`TextEmotionClassifier.predict()` returns `shared_distribution` over all seven
+labels either way, so both tasks satisfy the same contract. For the MTEB models
+`neutral` and `disgust` are simply always zero.
+
+## The seven-class task (GoEmotions)
+
+**Dataset:** `google-research-datasets/go_emotions`, `simplified` config — 43,410
+Reddit comments annotated with 28 fine-grained emotions, including both
+`neutral` and `disgust`.
+
+**Mapping:** the grouping published with the GoEmotions paper
+(`ekman_mapping.json`), plus `neutral` as a seventh group. Using the authors'
+own grouping rather than an ad-hoc one makes the collapse citable instead of a
+judgement call made here. It lands exactly on the ViT's seven classes:
+
+| Shared label | GoEmotions labels folded into it |
+|---|---|
+| angry | anger, annoyance, disapproval |
+| disgust | disgust |
+| fear | fear, nervousness |
+| happy | admiration, amusement, approval, caring, desire, excitement, gratitude, joy, love, optimism, pride, relief |
+| neutral | neutral |
+| sad | disappointment, embarrassment, grief, remorse, sadness |
+| surprise | confusion, curiosity, realization, surprise |
+
+Two groupings are worth flagging because they are not obvious: `surprise`
+absorbs confusion, curiosity and realization — Ekman treats surprise as the
+reaction to the unexpected, which covers being puzzled by it as well as
+startled. And `happy` absorbs twelve of the 28 labels, which is part of why it
+is the model's strongest class.
+
+**Multi-label handling.** GoEmotions allows several labels per comment.
+Collapsing to the Ekman seven resolves most of that, because co-occurring labels
+are usually near-synonyms landing in the same group. Rows that still span two
+groups express genuinely mixed affect and are **dropped**, not forced: assigning
+one arbitrarily would teach the model the other is wrong, and keeping them would
+make the reported accuracy depend on a tie-break rule rather than on the model.
+
+| Split | Kept | Dropped as mixed |
+|---|---|---|
+| train | 39,555 | 3,855 (8.9%) |
+| validation | 4,946 | 480 (8.8%) |
+| test | 4,968 | 459 (8.5%) |
+
+### Results (TinyBERT, 5 epochs, CPU)
+
+**Accuracy 65.64% · macro-F1 59.52%**
+
+| Emotion | Precision | Recall | F1 | Support |
+|---|---|---|---|---|
+| angry | 46.65% | 62.06% | 53.26% | 572 |
+| disgust | 39.53% | 67.11% | 49.76% | 76 |
+| fear | 50.82% | 77.50% | 61.39% | 80 |
+| happy | 82.04% | 81.64% | 81.84% | 1,863 |
+| neutral | 70.67% | 46.51% | 56.10% | 1,606 |
+| sad | 48.63% | 62.90% | 54.85% | 283 |
+| surprise | 51.10% | 71.11% | 59.47% | 488 |
+
+**These numbers are much lower than the 92.30% on MTEB, and that is expected —
+not a regression.** The two tasks are not comparable:
+
+- MTEB emotion is first-person *"i feel X"* tweets. The phrasing is almost a
+  template, and the label is frequently stated outright in the sentence. 92% on
+  that corpus does not mean 92% on free-form conversation.
+- GoEmotions is real Reddit comments — sarcasm, context-dependence, fragments,
+  and a `neutral` class covering a third of the data.
+- Seven classes instead of six, including the two hardest to pin down.
+
+The honest reading: **the MTEB score was optimistic for the deployment setting,
+and the GoEmotions score is the one that reflects what the live system does.**
+That is why the server loads the GoEmotions checkpoint by preference and warns
+when it has to fall back to a six-class one.
+
+### Calibration
+
+Both tasks fit a temperature on the validation split after training and store it
+in `calibration.json` beside the weights. TinyBERT/GoEmotions: **T = 1.198**,
+test ECE **0.099 → 0.050**.
+
+This is not cosmetic. The class-weighted loss deliberately distorts the decision
+boundary toward the rare classes — necessary for macro-F1, but it leaves the
+probabilities overconfident as a side effect. The fusion module pools the two
+modalities by their *log-probabilities*, so an overconfident modality contributes
+a sharper vector and wins arguments it has not earned. Calibrating both sides is
+what makes the comparison fair. Because scaling is monotone it changes no
+prediction: accuracy and macro-F1 are identical before and after.
 
 ## Project structure
 
 ```
 text-emotion-module/
 │
-├── config.py               model registry, label maps, fusion bridge
-├── data.py                 MTEB loading, tokenisation, class weights
+├── config.py               model registry, task registry, label maps
+├── data.py                 MTEB + GoEmotions loading, tokenisation, weights
 ├── modeling.py             model construction + MobileBERT head fix
 ├── metrics.py              accuracy / macro-P / macro-R / macro-F1
-├── train.py                fine-tuning loop
-├── benchmark.py            quality + size + latency comparison
+├── calibration.py          temperature scaling and ECE
+├── train.py                fine-tuning loop (--task)
+├── benchmark.py            quality + size + latency comparison (--task)
 ├── predict.py              inference CLI and TextEmotionClassifier
 ├── report.py               figure and table generation
-├── test_text_module.py     test suite
+├── test_text_module.py     test suite (33 tests)
 │
 ├── requirements.txt
 ├── assets/                 generated figures used by this README
-├── results/                benchmark.json, tables.md, train_log.txt
+├── results/                benchmark.json, benchmark_goemotions.json, logs
 └── checkpoints/            fine-tuned weights (git-ignored)
+    ├── tinybert/                     6-class MTEB
+    └── goemotions-tinybert/          7-class, what the server loads
 ```
 
 `checkpoints/` is git-ignored — the weights are large and regenerable. The
