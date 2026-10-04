@@ -295,9 +295,9 @@
       "class_weight_power": 0.5,
       "label_smoothing": 0.1,
       "latency": {
-        "median_ms": 0.5948499999703927,
-        "p95_ms": 1.1582199999565999,
-        "mean_ms": 0.6921039999724599,
+        "median_ms": 0.5640500003210036,
+        "p95_ms": 0.7894149997810014,
+        "mean_ms": 0.5883300002460601,
         "device": "cuda",
         "batch_size": 1
       }
@@ -532,9 +532,9 @@
       "class_weight_power": 0.5,
       "label_smoothing": 0.1,
       "latency": {
-        "median_ms": 16.500749999977415,
-        "p95_ms": 19.426975000033046,
-        "mean_ms": 16.844516000001022,
+        "median_ms": 16.014950000680983,
+        "p95_ms": 19.37771500179224,
+        "mean_ms": 16.319846000042162,
         "device": "cuda",
         "batch_size": 1
       }
