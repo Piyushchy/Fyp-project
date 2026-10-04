@@ -825,6 +825,62 @@ def test_temperature_softens_without_reordering():
 
 
 # ============================================================
+# THE AUDIO BUFFER
+# ============================================================
+#
+# AudioBuffer only, not AudioEmotionRuntime: the runtime loads a
+# 380 MB checkpoint, and the buffer is where the logic that can
+# actually be wrong lives.
+# ============================================================
+
+
+def test_audio_buffer_reports_short_windows_as_none():
+    """A window must not be scored before 4 seconds have arrived."""
+
+    from audio_runtime import AudioBuffer
+
+    buffer = AudioBuffer(capacity=32000)
+    buffer.extend(np.zeros(4000, dtype=np.float32))
+
+    assert buffer.window(16000) is None
+
+
+def test_audio_buffer_returns_the_most_recent_samples():
+    from audio_runtime import AudioBuffer
+
+    buffer = AudioBuffer(capacity=32000)
+
+    for start in range(0, 16000, 4000):
+        buffer.extend(np.arange(start, start + 4000, dtype=np.float32))
+
+    window = buffer.window(8000)
+
+    # The newest 8000, not the oldest: the model is asked what the
+    # speaker sounds like now.
+    assert window is not None
+    assert window[0] == 8000.0
+    assert window[-1] == 15999.0
+
+
+def test_audio_buffer_stays_bounded_over_a_long_session():
+    """A session runs for minutes; the buffer must not grow with it."""
+
+    from audio_runtime import AudioBuffer
+
+    capacity = 32000
+    buffer = AudioBuffer(capacity=capacity)
+
+    for _ in range(500):
+        buffer.extend(np.zeros(4000, dtype=np.float32))
+
+    held = buffer.seconds_held * 16000
+
+    # Eviction is whole-chunk, so a chunk's worth of slack is expected.
+    assert held <= capacity + 4000, held
+    assert buffer.window(16000) is not None
+
+
+# ============================================================
 # THE NEUTRAL MARGIN
 # ============================================================
 

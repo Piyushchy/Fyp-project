@@ -1,17 +1,20 @@
 # Multimodal Emotion Recognition
 
-Real-time emotion recognition from **face and text together**. A Vision
-Transformer reads facial expression from a webcam, a fine-tuned compact
+Real-time emotion recognition from **face, voice and text together**. A
+Vision Transformer reads facial expression from a webcam, a WavLM
+encoder reads prosody from the microphone, a fine-tuned compact
 transformer reads typed messages, and a reliability-weighted pool fuses
 them into a single answer that explains how it was reached.
 
 ```
 webcam ──▶ YuNet detect ──▶ adaptive crop ──▶ ViT ONNX ──▶ smooth ──┐
-                                                                     ├──▶ fused emotion
-chat  ──▶ TinyBERT (GoEmotions) ──────────────▶ decay with age ──────┘
+                                                                     │
+mic    ──▶ 16 kHz window ──▶ WavLM + attentive pooling ──▶ decay ────┼──▶ fused emotion
+                                                                     │
+chat   ──▶ TinyBERT (GoEmotions) ─────────────▶ decay with age ──────┘
 ```
 
-Both modalities predict over the **same seven classes**, so their
+All three modalities predict over the **same seven classes**, so their
 probability vectors are directly comparable:
 
 ```
@@ -29,6 +32,12 @@ cd vit-emotion-v2-deployment
 pip install -r requirements.txt   # curated; root requirements.txt is a full freeze
 python setup_models.py            # one-time: YuNet face detector (227 KB)
 uvicorn server:app --port 8000
+```
+
+All three modalities, with the neutral-prior correction on:
+
+```bash
+EMOTION_AUDIO=on EMOTION_NEUTRAL_MARGIN=0.18 uvicorn server:app --port 8000
 ```
 
 Open **http://localhost:8000/**.
@@ -334,6 +343,27 @@ Composite score: **49.7 / 100**, broken into capability, fusion gain,
 calibration, robustness and conflict discrimination in
 [`results/multimodal.json`](audio-emotion-module/results/multimodal.json).
 
+### In the live session
+
+`EMOTION_AUDIO=on` turns the third leg on. The browser captures the
+microphone, resamples to 16 kHz mono in an **AudioWorklet**, and sends
+0.5 s blocks of int16 PCM over the existing WebSocket; the server keeps
+a rolling 4-second window per session and re-scores it once a second,
+replicating the training preprocessing exactly — silence trimmed at
+30 dB, peak-normalised to 0.95. Without that normalisation the model
+sees a systematically quieter input than anything in its corpus.
+
+The resampling has to happen off the main thread. A first version used
+a `ScriptProcessorNode`, whose callback runs on the main thread under a
+realtime deadline that Chrome services ahead of ordinary work — and the
+frame path *is* ordinary work. It took the page from 46 FPS to 0.8
+while the server sat idle answering frames in 40 ms. On the audio
+thread the cost disappears: measured 45.7 FPS with audio running.
+
+A window below 10% voiced is dropped rather than scored, so a pause
+contributes nothing instead of contributing whatever the encoder emits
+for room tone.
+
 ---
 
 ## Fusion
@@ -495,11 +525,11 @@ python eval_fusion.py
   replaces the previous, because the question is "what is the user
   feeling now".
 * **One face at a time** — the largest in frame.
-* **The audio modality is trained but not yet live.** `fusion.py`
-  accepts audio evidence and the pool weights it, but `server.py` and
-  the web UI do not capture microphone audio — so a running session is
-  still face + text. Wiring the browser's audio stream to a rolling
-  4-second window is the remaining integration step.
+* **The audio modality is off by default.** It is wired end to end —
+  browser mic → 16 kHz resample → rolling 4 s window → WavLM → the
+  pool — but loading it costs 380 MB of weights and ~19 ms per window,
+  so it is opt-in via `EMOTION_AUDIO=on`. Without a GPU it is
+  noticeably slower.
 * Emotion recognition from appearance estimates *expression*, not what
   a person is actually feeling. Confidence scores should not be read as
   certainty about someone's internal state.

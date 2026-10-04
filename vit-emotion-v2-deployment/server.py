@@ -1,7 +1,7 @@
 """
 FastAPI backend for real-time multimodal emotion recognition.
 
-One WebSocket carries both modalities. Video frames arrive as
+One WebSocket carries all three modalities. Video frames arrive as
 Base64-encoded JPEG and run face detection -> alignment -> ViT ONNX
 inference -> temporal smoothing. Text messages arrive on the same
 socket and run a fine-tuned compact transformer. Every frame reports
@@ -18,15 +18,17 @@ from.
 
 Protocol
 --------
-Client -> server, either:
+Client -> server, one of:
     {"type": "frame", "data": "<base64 jpeg>"}
     {"type": "text",  "text": "a message", "id": 7}
+    {"type": "audio", "data": "<base64 int16 PCM, 16 kHz mono>"}
 A bare Base64 string is still accepted and treated as a frame, so the
 original single-modality client keeps working.
 
 Server -> client:
-    {"type": "frame", fps, face{...}, text{...}, fusion{...}}
+    {"type": "frame", fps, face{...}, text{...}, audio{...}, fusion{...}}
     {"type": "text_result", id, label, confidence, probs{...}}
+    {"type": "audio_result", label, confidence, voiced_ratio, probs{...}}
     {"type": "error", message}
 """
 
@@ -60,7 +62,7 @@ from face_pipeline import (
     describe_providers,
     select_providers,
 )
-from fusion import FusionEngine, TextEvidence
+from fusion import AudioEvidence, FusionEngine, TextEvidence
 from labels import SHARED_LABELS, assert_matches_config
 
 # ============================================================
@@ -180,6 +182,43 @@ if not 0.0 <= NEUTRAL_MARGIN < 1.0:
         f"EMOTION_NEUTRAL_MARGIN must be in [0, 1), got {NEUTRAL_MARGIN}"
     )
 
+# ============================================================
+# AUDIO MODALITY
+# ============================================================
+#
+# The third leg. Off by default for two reasons that both have
+# to be accepted before it is worth enabling:
+#
+#   - it loads a 380 MB PyTorch checkpoint, which is most of the
+#     server's memory footprint and is pure waste if nobody
+#     speaks into the page;
+#   - it costs ~19 ms per window on this GPU and several times
+#     that on CPU. A window is scored about once a second, so
+#     that is affordable on a GPU and marginal without one.
+#
+# The browser only asks for microphone permission when this is
+# on, so leaving it off also keeps the page from prompting for
+# a device it would not use.
+#
+#   EMOTION_AUDIO=on
+#
+# AUDIO_WINDOW_INTERVAL is how often a window is scored. The
+# model reads 4 seconds; re-scoring every 1.0 s means successive
+# windows overlap by 75%, so the label tracks a change in the
+# voice within about a second rather than waiting for a fresh
+# non-overlapping window.
+# ============================================================
+
+AUDIO_ENABLED = os.environ.get("EMOTION_AUDIO", "off").lower() in (
+    "on", "1", "true", "yes",
+)
+
+AUDIO_MODEL = os.environ.get("EMOTION_AUDIO_MODEL", "wavlm-base-plus")
+
+AUDIO_WINDOW_INTERVAL = float(
+    os.environ.get("EMOTION_AUDIO_INTERVAL", "1.0")
+)
+
 # Use the GPU when one is available for it. Both modalities honour this.
 # Set EMOTION_DEVICE=cpu to force CPU, which is worth doing when
 # comparing latency numbers against the CPU-only figures in the README.
@@ -292,6 +331,9 @@ class Runtime:
     detector_name: str = ""
     face_provider: str = "unknown"
     text_device: str = "cpu"
+    audio: Any = None
+    audio_model_name: str = "unavailable"
+    audio_device: str = "cpu"
 
 
 runtime = Runtime()
@@ -309,6 +351,14 @@ class SessionState:
     face: FaceSessionState
     text: TextEvidence | None = None
     previous_frame_time: float = field(default_factory=time.monotonic)
+
+    # Audio arrives as a continuous stream but is scored in windows,
+    # so the buffer and the last scored result are separate: every
+    # frame fuses against the most recent window, not against whatever
+    # happens to be in the buffer at that instant.
+    audio_buffer: Any = None
+    audio: AudioEvidence | None = None
+    last_audio_score: float = 0.0
 
 
 # ============================================================
@@ -475,6 +525,46 @@ async def lifespan(_app: FastAPI):
     runtime.detector_name = detector.name
     runtime.fusion = FusionEngine()
 
+    # ----------------------------------------------------
+    # Audio leg
+    # ----------------------------------------------------
+    #
+    # Non-fatal on failure, for the same reason the text model is: the
+    # face path is independently useful, and refusing to start because
+    # an optional 380 MB checkpoint is missing would be a worse
+    # outcome than running without it.
+    # ----------------------------------------------------
+
+    if AUDIO_ENABLED:
+        try:
+            from audio_runtime import AudioEmotionRuntime
+
+            runtime.audio = AudioEmotionRuntime(
+                model_key=AUDIO_MODEL,
+                device="cpu" if not PREFER_GPU else "auto",
+            )
+
+            described = runtime.audio.describe()
+            runtime.audio_model_name = described["display_name"]
+            runtime.audio_device = described["device"]
+
+            logger.info(
+                "Audio model loaded: %s on %s (%.1fs window every %.1fs)",
+                runtime.audio_model_name,
+                runtime.audio_device,
+                described["window_seconds"],
+                AUDIO_WINDOW_INTERVAL,
+            )
+        except Exception as error:
+            logger.warning(
+                "Audio modality requested but unavailable (%s). "
+                "Continuing without it.",
+                error,
+            )
+            runtime.audio = None
+    else:
+        logger.info("Audio modality off. Set EMOTION_AUDIO=on to enable.")
+
     if detector.name == "haar":
         logger.warning(
             "Falling back to the Haar cascade: no landmarks, so crops "
@@ -614,6 +704,7 @@ def process_frame(frame_bgr: np.ndarray, state: SessionState) -> dict[str, Any]:
         face_quality=face_result.quality.overall,
         text_evidence=state.text,
         now=now,
+        audio_evidence=state.audio,
     )
 
     # Drop text evidence once it has decayed past the cutoff, so a
@@ -621,13 +712,95 @@ def process_frame(frame_bgr: np.ndarray, state: SessionState) -> dict[str, Any]:
     if state.text is not None and not fused.text.present:
         state.text = None
 
+    # Same for audio, on its much shorter cutoff. Without this a user
+    # who stops talking keeps a 30-second-old voice window in the pool
+    # until the next one arrives, which for a silent room is never.
+    if state.audio is not None and not fused.audio.present:
+        state.audio = None
+
     return {
         "type": "frame",
         "fps": round(fps, 2),
         "face": face_result.as_dict(),
         "text": text_evidence_payload(state.text, now),
+        "audio": audio_evidence_payload(state.audio, now),
         "fusion": fused.as_dict(),
     }
+
+
+def audio_evidence_payload(
+    evidence: AudioEvidence | None, now: float
+) -> dict[str, Any] | None:
+    """What the UI shows for the audio leg."""
+
+    if evidence is None:
+        return None
+
+    index = int(np.argmax(evidence.probabilities))
+
+    return {
+        "label": SHARED_LABELS[index],
+        "confidence": round(float(evidence.probabilities[index]), 4),
+        "voiced_ratio": round(float(evidence.voiced_ratio), 4),
+        "age_seconds": round(evidence.age(now), 2),
+        "probs": {
+            label: round(float(evidence.probabilities[i]), 4)
+            for i, label in enumerate(SHARED_LABELS)
+        },
+    }
+
+
+def process_audio(samples: np.ndarray, state: SessionState) -> dict[str, Any] | None:
+    """Buffer incoming microphone samples and score a window when due.
+
+    Returns the audio payload when a new window was scored, None when
+    the samples were only buffered. Scoring every chunk would run the
+    encoder several times a second for no benefit - the window is 4
+    seconds long and barely changes between chunks.
+    """
+
+    if runtime.audio is None:
+        return None
+
+    if state.audio_buffer is None:
+        from audio_runtime import AudioBuffer
+
+        # Two windows of headroom, so a late chunk cannot evict audio
+        # the current window still needs.
+        state.audio_buffer = AudioBuffer(runtime.audio.clip_samples * 2)
+
+    state.audio_buffer.extend(samples)
+
+    now = time.monotonic()
+
+    if now - state.last_audio_score < AUDIO_WINDOW_INTERVAL:
+        return None
+
+    window = state.audio_buffer.window(runtime.audio.clip_samples)
+
+    if window is None:
+        return None
+
+    state.last_audio_score = now
+
+    scored = runtime.audio.predict(window)
+
+    if scored is None:
+        # Silence, or too little speech to label. Clear rather than
+        # keep the previous window: the user has stopped talking, and
+        # a stale opinion is worse than none.
+        state.audio = None
+        return None
+
+    probabilities, voiced_ratio = scored
+
+    state.audio = AudioEvidence(
+        probabilities=probabilities,
+        voiced_ratio=voiced_ratio,
+        timestamp=now,
+    )
+
+    return audio_evidence_payload(state.audio, now)
 
 
 # ============================================================
@@ -661,6 +834,11 @@ async def video_ws(ws: WebSocket) -> None:
             "text_model": runtime.text_model_name,
             "text_task": runtime.text_task,
             "text_available": runtime.text_classifier is not None,
+            "audio_model": runtime.audio_model_name,
+            "audio_available": runtime.audio is not None,
+            "audio_sample_rate": (
+                runtime.audio.sample_rate if runtime.audio else None
+            ),
             "tta": USE_TTA,
             "face_provider": runtime.face_provider,
             "text_device": runtime.text_device,
@@ -681,6 +859,8 @@ async def video_ws(ws: WebSocket) -> None:
 
             if message["type"] == "text":
                 await _handle_text(ws, state, message)
+            elif message["type"] == "audio":
+                await _handle_audio(ws, state, message)
             else:
                 await _handle_frame(ws, state, message)
 
@@ -710,7 +890,7 @@ def _parse_message(raw: str) -> dict[str, Any] | None:
 
         kind = message.get("type", "frame")
 
-        if kind not in ("frame", "text"):
+        if kind not in ("frame", "text", "audio"):
             return None
 
         message["type"] = kind
@@ -740,6 +920,49 @@ async def _handle_frame(
     payload = await run_in_threadpool(process_frame, frame, state)
 
     await ws.send_json(payload)
+
+
+async def _handle_audio(
+    ws: WebSocket, state: SessionState, message: dict[str, Any]
+) -> None:
+    """One chunk of 16 kHz mono PCM from the browser.
+
+    Samples arrive Base64-encoded as little-endian int16 rather than
+    as JSON numbers: a 1-second chunk is 16000 samples, and a JSON
+    array of floats for that is ~130 KB of text per chunk against
+    ~43 KB Base64, parsed far more slowly.
+    """
+
+    if runtime.audio is None:
+        # Not an error worth telling the client about on every chunk -
+        # it was told at hello time that audio is unavailable.
+        return
+
+    payload = message.get("data")
+
+    if not payload:
+        return
+
+    try:
+        raw = base64.b64decode(payload)
+    except Exception:
+        await ws.send_json({"type": "error", "message": "Bad audio chunk"})
+        return
+
+    if not raw:
+        return
+
+    samples = (
+        np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    )
+
+    scored = await run_in_threadpool(process_audio, samples, state)
+
+    # Only speak up when a new window was actually scored. The frame
+    # payload carries the audio leg too, so a silent return here just
+    # means the UI learns about it on the next frame instead.
+    if scored is not None:
+        await ws.send_json({"type": "audio_result", **scored})
 
 
 async def _handle_text(
@@ -860,6 +1083,9 @@ async def health() -> dict[str, Any]:
         "text_model": runtime.text_model_name,
         "text_task": runtime.text_task,
         "text_available": runtime.text_classifier is not None,
+        "audio_model": runtime.audio_model_name,
+        "audio_available": runtime.audio is not None,
+        "audio_device": runtime.audio_device,
         "labels": list(SHARED_LABELS),
     }
 

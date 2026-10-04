@@ -31,6 +31,7 @@
       --accent-amber: #fbbf24;
 
       --face-color: #22d3ee;
+      --audio-color: #fbbf24;
       --text-color: #a78bfa;
 
       --glass-bg: rgba(18, 18, 26, 0.65);
@@ -448,6 +449,7 @@
       min-width: 0;
     }
     .split-bar .seg-face { background: var(--face-color); }
+    .split-bar .seg-audio { background: var(--audio-color); }
     .split-bar .seg-text { background: var(--text-color); }
 
     .split-legend {
@@ -457,8 +459,10 @@
     .split-legend .lg { display: flex; align-items: center; gap: 6px; }
     .split-legend .swatch { width: 9px; height: 9px; border-radius: 3px; }
     .split-legend .sw-face { background: var(--face-color); }
+    .split-legend .sw-audio { background: var(--audio-color); }
     .split-legend .sw-text { background: var(--text-color); }
     .split-legend .lg-face { color: var(--face-color); }
+    .split-legend .lg-audio { color: var(--audio-color); }
     .split-legend .lg-text { color: var(--text-color); }
 
     /* Factor breakdown */
@@ -473,6 +477,7 @@
       display: flex; align-items: center; gap: 6px;
     }
     .factor-title.face { color: var(--face-color); }
+    .factor-title.audio { color: var(--audio-color); }
     .factor-title.text { color: var(--text-color); }
 
     .factor-row {
@@ -802,17 +807,24 @@
           </div>
           <div class="card-body">
             <div class="split-bar">
-              <div class="seg seg-face" id="segFace" style="width:50%">face</div>
-              <div class="seg seg-text" id="segText" style="width:50%">text</div>
+              <div class="seg seg-face" id="segFace" style="width:34%">face</div>
+              <div class="seg seg-audio" id="segAudio" style="width:33%">audio</div>
+              <div class="seg seg-text" id="segText" style="width:33%">text</div>
             </div>
             <div class="split-legend">
               <span class="lg lg-face"><span class="swatch sw-face"></span>Face <span id="legendFace">—</span></span>
+              <span class="lg lg-audio"><span class="swatch sw-audio"></span>Audio <span id="legendAudio">—</span></span>
               <span class="lg lg-text"><span class="swatch sw-text"></span>Text <span id="legendText">—</span></span>
             </div>
 
             <div class="factor-group">
               <div class="factor-title face">Face weight factors</div>
               <div id="faceFactors"><div class="factor-empty">No face evidence.</div></div>
+            </div>
+
+            <div class="factor-group">
+              <div class="factor-title audio">Audio weight factors</div>
+              <div id="audioFactors"><div class="factor-empty">No voice yet.</div></div>
             </div>
 
             <div class="factor-group">
@@ -886,8 +898,25 @@
           </div>
         </div>
 
+        <!-- Audio modality -->
+        <div class="glass-card animate-in delay-6" id="audioCard">
+          <div class="card-header">
+            <h2>Audio Modality</h2>
+            <span class="header-note" id="audioNote">—</span>
+          </div>
+          <div class="card-body">
+            <div class="decay-row" id="voicedRow" style="display:none;">
+              <span class="dl">Voiced</span>
+              <div class="dt"><div class="df" id="voicedFill" style="width:0%"></div></div>
+              <span class="dv" id="voicedValue">—</span>
+            </div>
+            <div class="dist-list" id="audioDist"></div>
+            <p class="muted-note" id="audioEmptyNote">Waiting for speech…</p>
+          </div>
+        </div>
+
         <!-- Text modality -->
-        <div class="glass-card animate-in delay-6">
+        <div class="glass-card animate-in delay-7">
           <div class="card-header">
             <h2>Text Modality</h2>
             <span class="header-note" id="textNote">—</span>
@@ -950,6 +979,12 @@
     let prevFusedLabel = null;
     let messageCounter = 0;
     let textAvailable = false;
+    let audioAvailable = false;
+    let micActive = false;
+    let audioStream = null;
+    let audioContext = null;
+    let audioNode = null;
+    let audioSource = null;
     const pendingMessages = new Map();
 
     /* ==========================================================
@@ -986,11 +1021,21 @@
     const $conflictText = $('conflictText');
 
     const $segFace = $('segFace');
+    const $segAudio = $('segAudio');
     const $segText = $('segText');
     const $legendFace = $('legendFace');
+    const $legendAudio = $('legendAudio');
     const $legendText = $('legendText');
     const $faceFactors = $('faceFactors');
+    const $audioFactors = $('audioFactors');
     const $textFactors = $('textFactors');
+    const $audioCard = $('audioCard');
+    const $audioNote = $('audioNote');
+    const $audioDist = $('audioDist');
+    const $audioEmptyNote = $('audioEmptyNote');
+    const $voicedRow = $('voicedRow');
+    const $voicedFill = $('voicedFill');
+    const $voicedValue = $('voicedValue');
     const $agreementNote = $('agreementNote');
 
     const $faceDist = $('faceDist');
@@ -1058,7 +1103,7 @@
       });
     }
 
-    [$fusedDist, $faceDist, $textDist].forEach(buildDistList);
+    [$fusedDist, $faceDist, $audioDist, $textDist].forEach(buildDistList);
 
     /* ==========================================================
        FACTOR ROWS
@@ -1068,21 +1113,27 @@
     // in [0,1], and it is surfaced through the decay meter instead.
     const FACTOR_ORDER = {
       face: ['quality', 'certainty'],
+      audio: ['recency', 'voiced', 'certainty'],
       text: ['recency', 'informativeness', 'certainty'],
     };
 
     function renderFactors(container, contribution, kind, weakest) {
+      const EMPTY = {
+        face: 'No face detected.',
+        audio: 'No voice yet.',
+        text: 'No message sent yet.',
+      };
+
       if (!contribution || !contribution.present) {
-        container.innerHTML = `<div class="factor-empty">${
-          kind === 'face' ? 'No face detected.' : 'No message sent yet.'
-        }</div>`;
+        container.innerHTML =
+          `<div class="factor-empty">${EMPTY[kind] || 'No evidence.'}</div>`;
         return;
       }
 
       const factors = contribution.factors || {};
       const rows = [];
 
-      FACTOR_ORDER[kind].forEach((name) => {
+      (FACTOR_ORDER[kind] || []).forEach((name) => {
         if (!(name in factors)) return;
         const value = factors[name];
         const isWeak = kind === 'face' && name === 'quality' && weakest;
@@ -1241,6 +1292,203 @@
     }
 
     /* ==========================================================
+       MICROPHONE
+       ==========================================================
+       The audio model wants 16 kHz mono float samples, and the
+       browser hands us whatever the device runs at - usually 44.1
+       or 48 kHz. Resampling happens here rather than on the server
+       because sending 48 kHz would triple the bytes on the wire for
+       audio the model is about to throw away.
+
+       It happens on the audio rendering thread, not here - see the
+       note on the worklet below for why that distinction cost the
+       page 45 FPS before it was fixed.
+       ========================================================== */
+
+    const AUDIO_TARGET_RATE = 16000;
+    const AUDIO_SEND_SAMPLES = 8000;   // 0.5 s at 16 kHz
+
+    /* An AudioWorklet, not a ScriptProcessorNode.
+       --------------------------------------------------------
+       The first version of this used a ScriptProcessorNode, which
+       runs its callback on the MAIN thread under a hard realtime
+       deadline. Chrome services that deadline ahead of ordinary main-
+       thread work, and the frame path is ordinary main-thread work:
+       drawImage plus a synchronous toDataURL JPEG encode. Measured,
+       it took the page from 46 FPS to 0.8 - the video pipeline was
+       being starved by the audio callback, while the server sat idle
+       answering frames in 40 ms.
+
+       An AudioWorklet runs on the audio rendering thread instead, so
+       resampling and the Int16 conversion never touch the main
+       thread. What crosses back is one 16 KB ArrayBuffer twice a
+       second, transferred rather than copied. */
+
+    const AUDIO_WORKLET_SOURCE = `
+      class PcmDownsampler extends AudioWorkletProcessor {
+        constructor(options) {
+          super();
+          const o = options.processorOptions;
+          this.blockSize = o.blockSize;
+          // sampleRate is a global in the worklet scope: the real
+          // device rate, which is 44.1 kHz as often as 48.
+          this.ratio = sampleRate / o.targetRate;
+          this.buf = new Float32Array(this.blockSize);
+          this.filled = 0;
+          this.phase = 0;
+          this.sum = 0;
+          this.count = 0;
+        }
+
+        process(inputs) {
+          const ch = inputs[0] && inputs[0][0];
+          if (!ch) return true;
+
+          for (let i = 0; i < ch.length; i++) {
+            // Box-filter decimation with a fractional ratio carried
+            // across render quanta. Nearest-neighbour would alias
+            // everything above 8 kHz back into the band the model
+            // reads, and sibilance is loud up there.
+            this.sum += ch[i];
+            this.count++;
+            this.phase++;
+
+            if (this.phase >= this.ratio) {
+              this.phase -= this.ratio;
+              this.buf[this.filled++] = this.count ? this.sum / this.count : 0;
+              this.sum = 0;
+              this.count = 0;
+
+              if (this.filled === this.blockSize) {
+                const pcm = new Int16Array(this.blockSize);
+                for (let k = 0; k < this.blockSize; k++) {
+                  const v = Math.max(-1, Math.min(1, this.buf[k]));
+                  pcm[k] = v < 0 ? v * 0x8000 : v * 0x7fff;
+                }
+                this.port.postMessage(pcm.buffer, [pcm.buffer]);
+                this.filled = 0;
+              }
+            }
+          }
+
+          return true;
+        }
+      }
+      registerProcessor('pcm-downsampler', PcmDownsampler);
+    `;
+
+    function arrayBufferToBase64(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+
+      // Chunked: String.fromCharCode.apply blows its argument limit
+      // somewhere around 100k and these buffers get close.
+      const CHUNK = 0x8000;
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+      }
+
+      return btoa(binary);
+    }
+
+    async function startMicrophone() {
+      if (!audioAvailable || micActive) return false;
+
+      if (!(window.AudioContext || window.webkitAudioContext)
+          || !(window.AudioWorkletNode)) {
+        $audioNote.textContent = 'unsupported';
+        $audioEmptyNote.textContent =
+          'This browser has no AudioWorklet — running face + text only.';
+        return false;
+      }
+
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            // The browser's own speech cleanup would strip exactly the
+            // paralinguistic cues the model reads - AGC flattens the
+            // loudness contour that separates an excited read from a
+            // flat one, and noise suppression is tuned for
+            // intelligibility, not affect.
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+        });
+      } catch (err) {
+        console.warn('Microphone unavailable:', err);
+        $audioNote.textContent = 'mic denied';
+        $audioEmptyNote.textContent =
+          'Microphone permission denied — running face + text only.';
+        return false;
+      }
+
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+      // Blob URL rather than a served file: addModule needs a URL, and
+      // a second route on the server for eight lines of JS is more
+      // moving parts than inlining it here.
+      const blobUrl = URL.createObjectURL(
+        new Blob([AUDIO_WORKLET_SOURCE], { type: 'application/javascript' })
+      );
+
+      try {
+        await audioContext.audioWorklet.addModule(blobUrl);
+      } finally {
+        URL.revokeObjectURL(blobUrl);
+      }
+
+      audioSource = audioContext.createMediaStreamSource(audioStream);
+
+      audioNode = new AudioWorkletNode(audioContext, 'pcm-downsampler', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+        processorOptions: {
+          targetRate: AUDIO_TARGET_RATE,
+          blockSize: AUDIO_SEND_SAMPLES,
+        },
+      });
+
+      audioNode.port.onmessage = (event) => {
+        if (!running || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+        ws.send(JSON.stringify({
+          type: 'audio', data: arrayBufferToBase64(event.data),
+        }));
+      };
+
+      audioSource.connect(audioNode);
+
+      // A zero-gain sink keeps the graph pulling without echoing the
+      // microphone back out of the speakers.
+      const mute = audioContext.createGain();
+      mute.gain.value = 0;
+      audioNode.connect(mute);
+      mute.connect(audioContext.destination);
+
+      micActive = true;
+      $audioNote.textContent = 'listening…';
+      $audioEmptyNote.textContent = 'Waiting for speech…';
+
+      return true;
+    }
+
+    function stopMicrophone() {
+      if (audioNode) { audioNode.port.onmessage = null; audioNode.disconnect(); }
+      if (audioSource) audioSource.disconnect();
+      if (audioContext) audioContext.close();
+      if (audioStream) audioStream.getTracks().forEach((t) => t.stop());
+
+      audioNode = audioSource = audioContext = audioStream = null;
+      micActive = false;
+
+      $audioNote.textContent = '—';
+      $voicedRow.style.display = 'none';
+    }
+
+    /* ==========================================================
        WEBSOCKET
        ========================================================== */
     function connectWebSocket() {
@@ -1274,12 +1522,26 @@
             handleHello(data);
             break;
           case 'frame':
-            handleFrame(data);
-            awaitingFrameAck = false;
-            if (running) sendNextFrame();
+            // The ack is released in `finally`. A render bug used to
+            // leave awaitingFrameAck stuck true, which stopped the
+            // client requesting frames for the rest of the session -
+            // one undefined lookup read as "the server hung".
+            try {
+              handleFrame(data);
+            } catch (err) {
+              console.error('handleFrame failed', err);
+            } finally {
+              awaitingFrameAck = false;
+              if (running) sendNextFrame();
+            }
             break;
           case 'text_result':
             handleTextResult(data);
+            break;
+          case 'audio_result':
+            // The frame payload carries the audio leg too, so this is
+            // only for responsiveness between frames.
+            renderAudioEvidence(data);
             break;
           case 'error':
             handleServerError(data);
@@ -1307,7 +1569,7 @@
     function handleHello(data) {
       if (Array.isArray(data.labels) && data.labels.length) {
         EMOTION_KEYS = data.labels;
-        [$fusedDist, $faceDist, $textDist].forEach(buildDistList);
+        [$fusedDist, $faceDist, $audioDist, $textDist].forEach(buildDistList);
       }
 
       const landmarks = data.landmarks;
@@ -1352,6 +1614,19 @@
 
       setTextEnabled(Boolean(data.text_available));
 
+      // The mic is only requested once the server has said it can
+      // actually score audio. Prompting for a device the backend
+      // would ignore is a permission dialog with nothing behind it.
+      audioAvailable = Boolean(data.audio_available);
+
+      if (audioAvailable) {
+        $audioCard.style.display = '';
+        $audioNote.textContent = 'starting…';
+        if (running) startMicrophone();
+      } else {
+        $audioCard.style.display = 'none';
+      }
+
       if (data.text_available) {
         const sevenClass = data.text_task === 'goemotions';
         $chipText.textContent = sevenClass ? 'text · 7-class' : 'text · 6-class';
@@ -1373,8 +1648,38 @@
       $statFps.textContent = fps;
 
       renderFace(data.face);
+      renderAudioEvidence(data.audio);
       renderTextEvidence(data.text);
       renderFusion(data.fusion, data.face);
+    }
+
+    function renderAudioEvidence(audio) {
+      if (!audioAvailable) return;
+
+      if (!audio) {
+        $audioNote.textContent = micActive ? 'listening…' : '—';
+        $audioEmptyNote.style.display = '';
+        $audioEmptyNote.textContent = micActive
+          ? 'Waiting for speech…'
+          : 'Microphone off.';
+        $voicedRow.style.display = 'none';
+        renderDist($audioDist, null);
+        return;
+      }
+
+      $audioEmptyNote.style.display = 'none';
+      $audioNote.textContent =
+        `${audio.label} · ${(audio.confidence * 100).toFixed(0)}%`;
+
+      // The voiced fraction is the audio leg's quality term - below
+      // 10% the server drops the window entirely, so showing it
+      // explains why a modality that "has a microphone" can still be
+      // contributing nothing.
+      $voicedRow.style.display = '';
+      $voicedFill.style.width = (audio.voiced_ratio * 100).toFixed(1) + '%';
+      $voicedValue.textContent = `${(audio.voiced_ratio * 100).toFixed(0)}% · ${audio.age_seconds.toFixed(0)}s ago`;
+
+      renderDist($audioDist, audio.probs);
     }
 
     function renderFace(face) {
@@ -1446,9 +1751,11 @@
         $agreementNote.textContent = '—';
         renderDist($fusedDist, null);
         renderFactors($faceFactors, null, 'face');
+        renderFactors($audioFactors, null, 'audio');
         renderFactors($textFactors, null, 'text');
-        $segFace.style.width = '50%';
-        $segText.style.width = '50%';
+        $segFace.style.width = '34%';
+        $segAudio.style.width = '33%';
+        $segText.style.width = '33%';
         $legendFace.textContent = '—';
         $legendText.textContent = '—';
         $decayRow.style.display = 'none';
@@ -1486,17 +1793,22 @@
 
       // Contribution split
       const wFace = fusion.weights.face;
+      const wAudio = fusion.weights.audio || 0;
       const wText = fusion.weights.text;
 
       $segFace.style.width = (wFace * 100).toFixed(1) + '%';
+      $segAudio.style.width = (wAudio * 100).toFixed(1) + '%';
       $segText.style.width = (wText * 100).toFixed(1) + '%';
       $segFace.textContent = wFace > 0.12 ? (wFace * 100).toFixed(0) + '%' : '';
+      $segAudio.textContent = wAudio > 0.12 ? (wAudio * 100).toFixed(0) + '%' : '';
       $segText.textContent = wText > 0.12 ? (wText * 100).toFixed(0) + '%' : '';
       $legendFace.textContent = (wFace * 100).toFixed(0) + '%';
+      $legendAudio.textContent = (wAudio * 100).toFixed(0) + '%';
       $legendText.textContent = (wText * 100).toFixed(0) + '%';
 
       const weakest = face && face.quality ? face.quality.weakest : null;
       renderFactors($faceFactors, fusion.face, 'face', weakest);
+      renderFactors($audioFactors, fusion.audio, 'audio');
       renderFactors($textFactors, fusion.text, 'text');
 
       // Text decay meter, driven by the recency factor the server sent
@@ -1663,6 +1975,7 @@
 
       if (ws) { ws.close(); ws = null; }
       stopWebcam();
+      stopMicrophone();
       clearOverlay();
 
       setConnectionStatus('disconnected');
@@ -1675,7 +1988,10 @@
 
       renderFusion(null, null);
       renderDist($faceDist, null);
+      renderDist($audioDist, null);
       renderDist($textDist, null);
+      $audioEmptyNote.style.display = '';
+      $audioEmptyNote.textContent = 'Microphone off.';
     }
 
     $btnStart.addEventListener('click', startSession);
