@@ -108,3 +108,7 @@ training/*.log
 # confusing load error. v2 (already tracked), v4 and v6 are available.
 vit-emotion-v2-deployment/vit-emotion-v3.onnx
 vit-emotion-v2-deployment/vit-emotion-v5.onnx
+
+# Local virtualenvs from the multimodal branch
+emotion-env/
+.venv311/
