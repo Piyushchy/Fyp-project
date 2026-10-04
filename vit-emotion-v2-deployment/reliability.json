@@ -73,6 +73,23 @@
     "min_informative_tokens": 8.0,
     "min_effective_weight": 0.02,
     "fusion_temperature": 1.0,
-    "low_agreement_threshold": 0.8
+    "low_agreement_threshold": 0.8,
+    "audio_half_life_seconds": 8.0,
+    "audio_cutoff_seconds": 30.0,
+    "min_voiced_ratio": 0.1
+  },
+  "audio": {
+    "source": "WavLM-base+ (12L-768D) on the audio module's speaker-disjoint test split, wild (MELD) domain only - 2523 clips. Overall across both domains: 0.4901 accuracy, 0.4988 macro-F1.",
+    "base_weight": 0.9,
+    "per_class_f1": {
+      "angry": 0.4152,
+      "disgust": 0.0267,
+      "fear": 0.0494,
+      "happy": 0.2984,
+      "neutral": 0.4346,
+      "sad": 0.1931,
+      "surprise": 0.3073
+    },
+    "_note": "Trained by train_audio.py on 6 epochs max, best epoch 4. The acted domain scores markedly higher; see results/benchmark.json for both."
   }
 }

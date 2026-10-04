@@ -112,3 +112,45 @@ vit-emotion-v2-deployment/vit-emotion-v5.onnx
 # Local virtualenvs from the multimodal branch
 emotion-env/
 .venv311/
+
+# ============================================================
+# AUDIO EMOTION MODULE
+# ============================================================
+#
+# The assembled corpus is ~2.9 GB of 16 kHz WAV clips derived
+# from CREMA-D, RAVDESS, SAVEE and MELD, plus ~1.5 GB of MELD
+# source archives. Same decision as the face corpus above: the
+# bytes are redistributable only under each corpus's own licence
+# and are fully reproducible, so what ships is the recipe and
+# the manifest rather than the audio.
+#
+#   python audio-emotion-module/prepare_audio_data.py
+#
+# rebuilds every clip bit-for-bit - the sources are public
+# HuggingFace datasets and the split allocator is seeded. The
+# committed data/manifest.csv is the corpus *specification*:
+# one row per clip with its uid, label, speaker, split, domain,
+# transcript and measured quality, which is what makes a result
+# auditable without the waveforms.
+audio-emotion-module/data/clips/
+audio-emotion-module/data/_meld/
+
+# Cached MFCC matrices for the baseline CNN (~390 MB), rebuilt
+# on demand by data.build_mfcc_cache.
+audio-emotion-module/data/*.npy
+audio-emotion-module/data/*.uids.txt
+
+# WavLM fine-tune: ~380 MB of fp32 weights, over GitHub's 100 MB
+# per-file limit. Retrain with:
+#   python train_audio.py --model wavlm-base-plus
+# The MFCC baseline checkpoint is small and IS tracked, so the
+# comparison in results/benchmark.json can be re-run without a GPU.
+audio-emotion-module/checkpoints/wavlm-base-plus/model.pt
+
+# Derived prediction caches: re-created by eval_multimodal.py from the
+# committed checkpoints and manifest.
+audio-emotion-module/data/*.npz
+
+# Raw stdout captures from a training run. The trainer writes its own
+# transcript to results/train_<model>.txt, which is the one that ships.
+audio-emotion-module/results/run_*.out

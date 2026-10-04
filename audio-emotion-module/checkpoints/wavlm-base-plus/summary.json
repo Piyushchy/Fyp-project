@@ -1,0 +1,230 @@
+{
+  "model": "wavlm-base-plus",
+  "display_name": "WavLM-base+ (12L-768D)",
+  "kind": "ssl",
+  "hub_id": "microsoft/wavlm-base-plus",
+  "note": "Self-supervised speech encoder, 94k hours. Weighted layer sum into attentive statistics pooling.",
+  "parameters": 94975236,
+  "best_epoch": 4,
+  "best_val_macro_f1": 0.5598361498821055,
+  "training_seconds": 1452.1,
+  "epochs_run": 6,
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 1.6288875867318007,
+      "val_accuracy": 0.4828335506301608,
+      "val_macro_f1": 0.48271299495728337,
+      "val_ece": 0.03704149787294403,
+      "seconds": 244.9
+    },
+    {
+      "epoch": 2,
+      "train_loss": 1.3024000177222692,
+      "val_accuracy": 0.5076053889613211,
+      "val_macro_f1": 0.5007431147523358,
+      "val_ece": 0.053502995247221276,
+      "seconds": 245.6
+    },
+    {
+      "epoch": 3,
+      "train_loss": 1.178610833948847,
+      "val_accuracy": 0.5349847892220774,
+      "val_macro_f1": 0.538433421935132,
+      "val_ece": 0.08337004694509696,
+      "seconds": 237.8
+    },
+    {
+      "epoch": 4,
+      "train_loss": 1.0700849073480247,
+      "val_accuracy": 0.5545415036940461,
+      "val_macro_f1": 0.5598361498821055,
+      "val_ece": 0.1181109710290918,
+      "seconds": 239.7
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.9755231507567524,
+      "val_accuracy": 0.555845284658844,
+      "val_macro_f1": 0.5586343085338134,
+      "val_ece": 0.11427896012305591,
+      "seconds": 241.3
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.9227900588604065,
+      "val_accuracy": 0.5588874402433724,
+      "val_macro_f1": 0.5595876054396488,
+      "val_ece": 0.12642665766908104,
+      "seconds": 240.7
+    }
+  ],
+  "test": {
+    "support": 4179,
+    "accuracy": 0.49006939459200766,
+    "balanced_accuracy": 0.5214113917670117,
+    "macro_f1": 0.49877829733315304,
+    "weighted_f1": 0.4945740279968957,
+    "per_class_f1": {
+      "angry": 0.5922684172137126,
+      "disgust": 0.5856164383561644,
+      "fear": 0.596045197740113,
+      "happy": 0.42358078602620086,
+      "neutral": 0.4878457669740151,
+      "sad": 0.45614035087719296,
+      "surprise": 0.34995112414467255
+    },
+    "per_class_precision": {
+      "angry": 0.5286458333333334,
+      "disgust": 0.7037037037037037,
+      "fear": 0.548051948051948,
+      "happy": 0.40585774058577406,
+      "neutral": 0.6211312700106724,
+      "sad": 0.47380410022779046,
+      "surprise": 0.2594202898550725
+    },
+    "per_class_recall": {
+      "angry": 0.6733001658374793,
+      "disgust": 0.501466275659824,
+      "fear": 0.653250773993808,
+      "happy": 0.4429223744292237,
+      "neutral": 0.40165631469979296,
+      "sad": 0.4397463002114165,
+      "surprise": 0.5375375375375375
+    },
+    "per_class_support": {
+      "angry": 603,
+      "disgust": 341,
+      "fear": 323,
+      "happy": 657,
+      "neutral": 1449,
+      "sad": 473,
+      "surprise": 333
+    },
+    "ece": 0.1483129996464965,
+    "mean_confidence": 0.6359082460403442
+  },
+  "test_by_domain": {
+    "acted": {
+      "support": 1656,
+      "accuracy": 0.6938405797101449,
+      "balanced_accuracy": 0.6886037128059694,
+      "macro_f1": 0.6906316241366695,
+      "weighted_f1": 0.6943434828150519,
+      "per_class_f1": {
+        "angry": 0.8330464716006885,
+        "disgust": 0.6679764243614931,
+        "fear": 0.6666666666666666,
+        "happy": 0.6815144766146993,
+        "neutral": 0.7302325581395349,
+        "sad": 0.5989847715736041,
+        "surprise": 0.656
+      },
+      "per_class_precision": {
+        "angry": 0.7857142857142857,
+        "disgust": 0.7203389830508474,
+        "fear": 0.5903954802259888,
+        "happy": 0.8693181818181818,
+        "neutral": 0.7969543147208121,
+        "sad": 0.5479876160990712,
+        "surprise": 0.6612903225806451
+      },
+      "per_class_recall": {
+        "angry": 0.8864468864468864,
+        "disgust": 0.6227106227106227,
+        "fear": 0.7655677655677655,
+        "happy": 0.5604395604395604,
+        "neutral": 0.6738197424892703,
+        "sad": 0.6604477611940298,
+        "surprise": 0.6507936507936508
+      },
+      "per_class_support": {
+        "angry": 273,
+        "disgust": 273,
+        "fear": 273,
+        "happy": 273,
+        "neutral": 233,
+        "sad": 268,
+        "surprise": 63
+      },
+      "ece": 0.12052159929189125,
+      "mean_confidence": 0.8093586564064026
+    },
+    "wild": {
+      "support": 2523,
+      "accuracy": 0.3563218390804598,
+      "balanced_accuracy": 0.27469825451089136,
+      "macro_f1": 0.24638200644003888,
+      "weighted_f1": 0.3594439983789287,
+      "per_class_f1": {
+        "angry": 0.4151898734177215,
+        "disgust": 0.02666666666666667,
+        "fear": 0.04938271604938271,
+        "happy": 0.2983783783783784,
+        "neutral": 0.434560327198364,
+        "sad": 0.19314641744548286,
+        "surprise": 0.30734966592427615
+      },
+      "per_class_precision": {
+        "angry": 0.3565217391304348,
+        "disgust": 0.14285714285714285,
+        "fear": 0.06451612903225806,
+        "happy": 0.25508317929759705,
+        "neutral": 0.5743243243243243,
+        "sad": 0.2672413793103448,
+        "surprise": 0.2197452229299363
+      },
+      "per_class_recall": {
+        "angry": 0.49696969696969695,
+        "disgust": 0.014705882352941176,
+        "fear": 0.04,
+        "happy": 0.359375,
+        "neutral": 0.3495065789473684,
+        "sad": 0.15121951219512195,
+        "surprise": 0.5111111111111111
+      },
+      "per_class_support": {
+        "angry": 330,
+        "disgust": 68,
+        "fear": 50,
+        "happy": 384,
+        "neutral": 1216,
+        "sad": 205,
+        "surprise": 270
+      },
+      "ece": 0.16686523215807578,
+      "mean_confidence": 0.5220619440078735
+    }
+  },
+  "layer_mixture": [
+    0.06393186748027802,
+    0.06083231419324875,
+    0.06061360239982605,
+    0.06129312515258789,
+    0.06301284581422806,
+    0.06534837931394577,
+    0.06945701688528061,
+    0.07942118495702744,
+    0.10166256874799728,
+    0.10775493830442429,
+    0.09876507520675659,
+    0.08912520110607147,
+    0.07878179848194122
+  ],
+  "hyperparameters": {
+    "kind": "ssl",
+    "hub_id": "microsoft/wavlm-base-plus",
+    "learning_rate": 0.001,
+    "backbone_learning_rate": 5e-05,
+    "batch_size": 8,
+    "gradient_accumulation": 4,
+    "epochs": 6,
+    "weight_decay": 0.01,
+    "warmup_ratio": 0.1,
+    "patience": 3,
+    "mask_time_prob": 0.05,
+    "layerdrop": 0.0
+  },
+  "class_weight_power": 0.5,
+  "label_smoothing": 0.1
+}

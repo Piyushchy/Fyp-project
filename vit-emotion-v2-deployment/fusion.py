@@ -129,10 +129,25 @@ class FusionConfig:
 
     face: ModalityProfile
     text: ModalityProfile
+    audio: ModalityProfile
 
     text_half_life_seconds: float = 30.0
     text_cutoff_seconds: float = 180.0
     min_informative_tokens: float = 8.0
+
+    # Audio decays far faster than text. A typed message states
+    # something that stays true for a conversational turn; a 4-second
+    # voice window is a measurement of how someone sounded *then*, and
+    # one from half a minute ago says nothing about the current frame.
+    audio_half_life_seconds: float = 8.0
+    audio_cutoff_seconds: float = 30.0
+
+    # Below this fraction of voiced audio the window is a pause, not
+    # an utterance, and its distribution is whatever the model emits
+    # for room tone. Matches MIN_VOICED_SECONDS / CLIP_SECONDS in the
+    # audio module's config.
+    min_voiced_ratio: float = 0.10
+
     min_effective_weight: float = 0.02
     fusion_temperature: float = 1.0
     low_agreement_threshold: float = 0.45
@@ -149,6 +164,13 @@ class FusionConfig:
         return cls(
             face=ModalityProfile.from_config("face", raw.get("face", {})),
             text=ModalityProfile.from_config("text", raw.get("text", {})),
+            # Absent from reliability.json until the audio module has
+            # been benchmarked. from_config's defaults then give a flat
+            # reliability and base_weight 1.0, which is the right
+            # behaviour for a modality nothing is yet known about -
+            # but the engine will not see audio evidence at all until
+            # a caller passes some, so this costs nothing meanwhile.
+            audio=ModalityProfile.from_config("audio", raw.get("audio", {})),
             text_half_life_seconds=float(
                 dynamics.get("text_half_life_seconds", 30.0)
             ),
@@ -158,6 +180,13 @@ class FusionConfig:
             min_informative_tokens=float(
                 dynamics.get("min_informative_tokens", 8.0)
             ),
+            audio_half_life_seconds=float(
+                dynamics.get("audio_half_life_seconds", 8.0)
+            ),
+            audio_cutoff_seconds=float(
+                dynamics.get("audio_cutoff_seconds", 30.0)
+            ),
+            min_voiced_ratio=float(dynamics.get("min_voiced_ratio", 0.10)),
             min_effective_weight=float(
                 dynamics.get("min_effective_weight", 0.02)
             ),
@@ -281,6 +310,26 @@ class TextEvidence:
 
 
 @dataclass
+class AudioEvidence:
+    """The most recent scored voice window and when it was captured.
+
+    `voiced_ratio` is the fraction of the window that carried
+    above-floor speech. It plays the role face quality plays: the
+    encoder returns a confident distribution for a window of silence
+    just as readily as for a shouted sentence, and only this says
+    which one it was.
+    """
+
+    probabilities: np.ndarray
+    voiced_ratio: float
+    timestamp: float
+
+    def age(self, now: float | None = None) -> float:
+        now = time.monotonic() if now is None else now
+        return max(0.0, now - self.timestamp)
+
+
+@dataclass
 class ModalityContribution:
     """One modality's pool exponent, display influence, and the factors
     that produced them.
@@ -317,7 +366,13 @@ class FusionResult:
     text: ModalityContribution
     agreement: float
     conflicted: bool
-    mode: str   # "fused" | "face_only" | "text_only" | "none"
+    mode: str   # "fused" | "<name>_only" | "none"
+
+    # Defaulted rather than positional so the two-modality callers
+    # that predate the audio leg still construct a valid result.
+    audio: ModalityContribution = field(
+        default_factory=lambda: ModalityContribution(present=False)
+    )
 
     def as_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -328,9 +383,11 @@ class FusionResult:
             "conflicted": self.conflicted,
             "weights": {
                 "face": round(self.face.influence, 4),
+                "audio": round(self.audio.influence, 4),
                 "text": round(self.text.influence, 4),
             },
             "face": self.face.as_dict(),
+            "audio": self.audio.as_dict(),
             "text": self.text.as_dict(),
             "probs": None,
         }
@@ -463,6 +520,46 @@ class FusionEngine:
             },
         )
 
+    def _audio_contribution(
+        self,
+        evidence: AudioEvidence | None,
+        now: float,
+    ) -> ModalityContribution:
+
+        if evidence is None:
+            return ModalityContribution(present=False)
+
+        age = evidence.age(now)
+
+        audio_recency = recency(
+            age,
+            self.config.audio_half_life_seconds,
+            self.config.audio_cutoff_seconds,
+        )
+
+        voiced = float(np.clip(evidence.voiced_ratio, 0.0, 1.0))
+
+        # A window that is mostly silence is not quiet evidence, it is
+        # no evidence. Zeroing rather than scaling keeps a run of
+        # pauses from accumulating into a confident wrong answer.
+        quality = 0.0 if voiced < self.config.min_voiced_ratio else voiced
+
+        audio_certainty = certainty(evidence.probabilities)
+
+        exponent = self.config.audio.base_weight * audio_recency * quality
+
+        return ModalityContribution(
+            present=True,
+            exponent=exponent,
+            factors={
+                "base": self.config.audio.base_weight,
+                "recency": audio_recency,
+                "voiced": quality,
+                "certainty": audio_certainty,
+                "age_seconds": round(age, 2),
+            },
+        )
+
     # --------------------------------------------------------
 
     def fuse(
@@ -471,6 +568,7 @@ class FusionEngine:
         face_quality: float,
         text_evidence: TextEvidence | None,
         now: float | None = None,
+        audio_evidence: AudioEvidence | None = None,
     ) -> FusionResult:
         """Combine whatever evidence is currently available."""
 
@@ -478,6 +576,7 @@ class FusionEngine:
 
         face = self._face_contribution(face_probabilities, face_quality)
         text = self._text_contribution(text_evidence, now)
+        audio = self._audio_contribution(audio_evidence, now)
 
         # An exponent below the floor is treated as absent rather than
         # as a tiny contribution: it cannot change any outcome, and
@@ -486,14 +585,40 @@ class FusionEngine:
 
         face_active = face.present and face.exponent >= floor
         text_active = text.present and text.exponent >= floor
+        audio_active = audio.present and audio.exponent >= floor
 
-        if not face_active and not text_active:
+        # One table, walked by every step below. Adding a fourth
+        # modality means adding a row here and nothing else.
+        active: list[tuple[str, ModalityContribution, np.ndarray, ModalityProfile]] = []
+
+        if face_active:
+            active.append(
+                ("face", face, np.asarray(face_probabilities, dtype=np.float64),
+                 self.config.face)
+            )
+
+        if audio_active and audio_evidence is not None:
+            active.append(
+                ("audio", audio,
+                 np.asarray(audio_evidence.probabilities, dtype=np.float64),
+                 self.config.audio)
+            )
+
+        if text_active and text_evidence is not None:
+            active.append(
+                ("text", text,
+                 np.asarray(text_evidence.probabilities, dtype=np.float64),
+                 self.config.text)
+            )
+
+        if not active:
             return FusionResult(
                 label=None,
                 confidence=0.0,
                 probabilities=None,
                 face=face,
                 text=text,
+                audio=audio,
                 agreement=0.0,
                 conflicted=False,
                 mode="none",
@@ -503,82 +628,75 @@ class FusionEngine:
         # result. Unlike the exponent this *does* include certainty,
         # because a present-but-uniform modality contributes nothing and
         # the bar should say so.
-        face_influence = (
-            face.exponent * face.factors.get("certainty", 0.0)
-            if face_active
-            else 0.0
+        influences = [
+            contribution.exponent * contribution.factors.get("certainty", 0.0)
+            for _, contribution, _, _ in active
+        ]
+
+        influence_total = sum(influences)
+
+        for (_, contribution, _, _), value in zip(active, influences):
+            if influence_total > 0:
+                contribution.influence = value / influence_total
+            else:
+                # Every active modality is perfectly uniform. Split the
+                # bar evenly rather than showing zeros, which would read
+                # as "no modalities".
+                contribution.influence = 1.0 / len(active)
+
+        pooled = _log_pool(
+            [
+                (probabilities, contribution.exponent, profile.reliability)
+                for _, contribution, probabilities, profile in active
+            ],
+            self.config.fusion_temperature,
         )
-        text_influence = (
-            text.exponent * text.factors.get("certainty", 0.0)
-            if text_active
-            else 0.0
-        )
-
-        influence_total = face_influence + text_influence
-
-        if influence_total > 0:
-            face.influence = face_influence / influence_total
-            text.influence = text_influence / influence_total
-        else:
-            # Both present but both perfectly uniform. Split the bar
-            # evenly among the active modalities rather than showing
-            # zeros, which would read as "no modalities".
-            active = int(face_active) + int(text_active)
-            face.influence = (1.0 / active) if face_active else 0.0
-            text.influence = (1.0 / active) if text_active else 0.0
-
-        contributions: list[tuple[np.ndarray, float, np.ndarray]] = []
-
-        if face_active:
-            contributions.append(
-                (
-                    np.asarray(face_probabilities, dtype=np.float64),
-                    face.exponent,
-                    self.config.face.reliability,
-                )
-            )
-
-        if text_active and text_evidence is not None:
-            contributions.append(
-                (
-                    np.asarray(text_evidence.probabilities, dtype=np.float64),
-                    text.exponent,
-                    self.config.text.reliability,
-                )
-            )
-
-        pooled = _log_pool(contributions, self.config.fusion_temperature)
 
         index = int(np.argmax(pooled))
 
-        # Agreement only means something when there are two opinions to
-        # compare. With one modality it is 1.0 - nothing disagrees -
-        # rather than 0.0, which would read as total conflict.
-        if face_active and text_active and text_evidence is not None:
-            coefficient = agreement(
-                face_probabilities, text_evidence.probabilities
-            )
-            mode = "fused"
-
-            # Two conditions, because either alone misfires. A low
-            # coefficient with the same argmax just means the two
-            # modalities are differently confident about the same
-            # emotion, which is not a conflict. Differing argmaxes with
-            # a high coefficient means both are near-uniform and are
-            # not really claiming anything, which is not a conflict
-            # either - it is two shrugs.
-            names_differ = int(
-                np.argmax(face_probabilities)
-            ) != int(np.argmax(text_evidence.probabilities))
-
-            conflicted = (
-                names_differ
-                and coefficient < self.config.low_agreement_threshold
-            )
-        else:
+        # Agreement only means something when there are at least two
+        # opinions to compare. With one modality it is 1.0 - nothing
+        # disagrees - rather than 0.0, which would read as total
+        # conflict.
+        if len(active) < 2:
             coefficient = 1.0
             conflicted = False
-            mode = "face_only" if face_active else "text_only"
+            mode = f"{active[0][0]}_only"
+        else:
+            mode = "fused"
+
+            coefficients = []
+            conflicts = []
+
+            for first in range(len(active)):
+                for second in range(first + 1, len(active)):
+                    left = active[first][2]
+                    right = active[second][2]
+
+                    pair = agreement(left, right)
+                    coefficients.append(pair)
+
+                    # Two conditions, because either alone misfires. A
+                    # low coefficient with the same argmax just means
+                    # the two modalities are differently confident
+                    # about the same emotion, which is not a conflict.
+                    # Differing argmaxes with a high coefficient means
+                    # both are near-uniform and are not really claiming
+                    # anything, which is not a conflict either - it is
+                    # two shrugs.
+                    conflicts.append(
+                        int(np.argmax(left)) != int(np.argmax(right))
+                        and pair < self.config.low_agreement_threshold
+                    )
+
+            # The mean over pairs, so the reported figure keeps meaning
+            # "how much do the active modalities look alike" whether
+            # there are two of them or three. Conflict is any() rather
+            # than all(): one modality flatly contradicting the others
+            # is the case the flag exists to surface, and averaging it
+            # against two agreeing pairs would hide it.
+            coefficient = float(np.mean(coefficients))
+            conflicted = any(conflicts)
 
         return FusionResult(
             label=SHARED_LABELS[index],
@@ -586,6 +704,7 @@ class FusionEngine:
             probabilities=pooled,
             face=face,
             text=text,
+            audio=audio,
             agreement=coefficient,
             conflicted=conflicted,
             mode=mode,

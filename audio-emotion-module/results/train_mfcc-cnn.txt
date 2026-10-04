@@ -1,0 +1,117 @@
+==============================================================
+TRAINING mfcc-cnn
+==============================================================
+  device  cuda
+  gpu     NVIDIA GeForce RTX 4060
+
+--- corpus ---
+  train        13532   angry:2322  disgust:1485  fear:1491  happy:2443  neutral:2443  sad:1854  surprise:1494
+  validation    2301   angry:349  disgust:223  fear:238  happy:361  neutral:632  sad:307  surprise:191
+  test          4179   angry:603  disgust:341  fear:323  happy:657  neutral:1449  sad:473  surprise:333
+
+--- MFCC CNN (4 blocks) ---
+  parameters      390,599
+  batch size      64 x 1 accumulated
+  epochs          30
+  head lr         0.001
+  backbone lr     None
+  class weights   angry:0.90  disgust:1.12  fear:1.12  happy:0.87  neutral:0.87  sad:1.00  surprise:1.12
+  precision       bf16 autocast
+    epoch 1 step 100/211 loss 1.8438
+    epoch 1 step 200/211 loss 1.7897
+  epoch  1  loss 1.7872  val acc 0.2373  val macro-F1 0.2205  ECE 0.0956  (4s)
+    saved (val macro-F1 0.2205)
+    epoch 2 step 100/211 loss 1.6991
+    epoch 2 step 200/211 loss 1.6975
+  epoch  2  loss 1.6950  val acc 0.2399  val macro-F1 0.1768  ECE 0.2145  (3s)
+    epoch 3 step 100/211 loss 1.6529
+    epoch 3 step 200/211 loss 1.6477
+  epoch  3  loss 1.6456  val acc 0.3159  val macro-F1 0.2908  ECE 0.0892  (3s)
+    saved (val macro-F1 0.2908)
+    epoch 4 step 100/211 loss 1.6126
+    epoch 4 step 200/211 loss 1.6083
+  epoch  4  loss 1.6099  val acc 0.2225  val macro-F1 0.1629  ECE 0.2823  (3s)
+    epoch 5 step 100/211 loss 1.5685
+    epoch 5 step 200/211 loss 1.5723
+  epoch  5  loss 1.5721  val acc 0.2907  val macro-F1 0.2507  ECE 0.2065  (3s)
+    epoch 6 step 100/211 loss 1.5388
+    epoch 6 step 200/211 loss 1.5412
+  epoch  6  loss 1.5420  val acc 0.2525  val macro-F1 0.2317  ECE 0.2418  (3s)
+    epoch 7 step 100/211 loss 1.5128
+    epoch 7 step 200/211 loss 1.5113
+  epoch  7  loss 1.5080  val acc 0.3442  val macro-F1 0.3476  ECE 0.1126  (3s)
+    saved (val macro-F1 0.3476)
+    epoch 8 step 100/211 loss 1.4756
+    epoch 8 step 200/211 loss 1.4686
+  epoch  8  loss 1.4697  val acc 0.2412  val macro-F1 0.1969  ECE 0.3540  (3s)
+    epoch 9 step 100/211 loss 1.4250
+    epoch 9 step 200/211 loss 1.4339
+  epoch  9  loss 1.4356  val acc 0.1747  val macro-F1 0.1249  ECE 0.4863  (3s)
+    epoch 10 step 100/211 loss 1.3802
+    epoch 10 step 200/211 loss 1.3972
+  epoch 10  loss 1.3983  val acc 0.3281  val macro-F1 0.2601  ECE 0.3122  (3s)
+    epoch 11 step 100/211 loss 1.3508
+    epoch 11 step 200/211 loss 1.3582
+  epoch 11  loss 1.3561  val acc 0.2634  val macro-F1 0.2153  ECE 0.4238  (3s)
+    epoch 12 step 100/211 loss 1.2985
+    epoch 12 step 200/211 loss 1.3127
+  epoch 12  loss 1.3162  val acc 0.2195  val macro-F1 0.1851  ECE 0.3732  (3s)
+    epoch 13 step 100/211 loss 1.2693
+    epoch 13 step 200/211 loss 1.2723
+  epoch 13  loss 1.2719  val acc 0.3329  val macro-F1 0.3130  ECE 0.1997  (3s)
+    epoch 14 step 100/211 loss 1.2171
+    epoch 14 step 200/211 loss 1.2255
+  epoch 14  loss 1.2263  val acc 0.2399  val macro-F1 0.1641  ECE 0.4900  (3s)
+    epoch 15 step 100/211 loss 1.1871
+    epoch 15 step 200/211 loss 1.1820
+  epoch 15  loss 1.1827  val acc 0.2195  val macro-F1 0.1446  ECE 0.5599  (3s)
+    no gain in 8 epochs, stopping
+
+--- test, best epoch 7 ---
+  overall
+  support 4179   acc 0.3147   macro-F1 0.3218   weighted-F1 0.2875   bal-acc 0.3708
+  ECE 0.1372   mean confidence 0.4514
+  class         prec     rec      f1       n
+  angry       0.3134  0.6335  0.4193     603
+  disgust     0.4086  0.3079  0.3512     341
+  fear        0.2976  0.6192  0.4020     323
+  happy       0.2263  0.3957  0.2879     657
+  neutral     0.5133  0.1063  0.1761    1449
+  sad         0.5491  0.2600  0.3529     473
+  surprise    0.2542  0.2733  0.2634     333
+
+  confusion (rows true, columns predicted)
+              angry  disgu   fear  happy  neutr    sad  surpr
+  angry         382     11     42    110     22      5     31
+  disgust        95    105     44     67     14     13      3
+  fear           27     22    200     37     10     23      4
+  happy         160     18    122    260     46      9     42
+  neutral       396     51    142    485    154     46    175
+  sad            73     46     95     81     43    123     12
+  surprise       86      4     27    109     11      5     91
+
+  domain: acted
+  support 1656   acc 0.4529   macro-F1 0.4119   weighted-F1 0.4175   bal-acc 0.4252
+  ECE 0.0545   mean confidence 0.5032
+  class         prec     rec      f1       n
+  angry       0.5763  0.7473  0.6507     273
+  disgust     0.4234  0.3846  0.4031     273
+  fear        0.3793  0.7253  0.4981     273
+  happy       0.3385  0.3993  0.3664     273
+  neutral     0.3750  0.0129  0.0249     233
+  sad         0.6175  0.4216  0.5011     268
+  surprise    0.9474  0.2857  0.4390      63
+
+  domain: wild
+  support 2523   acc 0.2239   macro-F1 0.1555   weighted-F1 0.2061   bal-acc 0.2023
+  ECE 0.1938   mean confidence 0.4173
+  class         prec     rec      f1       n
+  angry       0.2058  0.5394  0.2979     330
+  disgust     0.0000  0.0000  0.0000      68
+  fear        0.0133  0.0400  0.0200      50
+  happy       0.1826  0.3932  0.2494     384
+  neutral     0.5171  0.1242  0.2003    1216
+  sad         0.2439  0.0488  0.0813     205
+  surprise    0.2153  0.2704  0.2397     270
+
+done: test macro-F1 0.3218, accuracy 0.3147

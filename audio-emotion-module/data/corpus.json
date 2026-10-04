@@ -1,0 +1,112 @@
+{
+  "sample_rate": 16000,
+  "clip_samples": 64000,
+  "labels": [
+    "angry",
+    "disgust",
+    "fear",
+    "happy",
+    "neutral",
+    "sad",
+    "surprise"
+  ],
+  "sources": {
+    "cremad": {
+      "kept": 7441,
+      "rejected_decode": 0,
+      "rejected_quality": 1
+    },
+    "ravdess": {
+      "kept": 2362,
+      "rejected_decode": 0,
+      "rejected_quality": 134
+    },
+    "savee": {
+      "kept": 480,
+      "rejected_decode": 0,
+      "rejected_quality": 0
+    },
+    "meld": {
+      "kept": 13313,
+      "rejected_decode": 0,
+      "rejected_quality": 393
+    }
+  },
+  "ravdess_calm_dropped": true,
+  "ravdess_song_included": false,
+  "quality_filter": {
+    "min_voiced_seconds": 0.4,
+    "min_rms": 0.0025,
+    "silence_top_db": 30.0
+  },
+  "splits": {
+    "test": 4179,
+    "train": 13532,
+    "validation": 2301
+  },
+  "class_counts": {
+    "train": {
+      "angry": 2322,
+      "disgust": 1485,
+      "fear": 1491,
+      "happy": 2443,
+      "neutral": 2443,
+      "sad": 1854,
+      "surprise": 1494
+    },
+    "validation": {
+      "angry": 349,
+      "disgust": 223,
+      "fear": 238,
+      "happy": 361,
+      "neutral": 632,
+      "sad": 307,
+      "surprise": 191
+    },
+    "test": {
+      "angry": 603,
+      "disgust": 341,
+      "fear": 323,
+      "happy": 657,
+      "neutral": 1449,
+      "sad": 473,
+      "surprise": 333
+    }
+  },
+  "domain_counts": {
+    "acted": {
+      "test": 1656,
+      "train": 6651,
+      "validation": 1228
+    },
+    "wild": {
+      "train": 6881,
+      "validation": 1073,
+      "test": 2523
+    }
+  },
+  "balance": {
+    "cap": 2443,
+    "before": {
+      "neutral": 5540,
+      "disgust": 1485,
+      "sad": 1854,
+      "happy": 2930,
+      "fear": 1491,
+      "angry": 2322,
+      "surprise": 1494
+    },
+    "after": {
+      "neutral": 2443,
+      "disgust": 1485,
+      "sad": 1854,
+      "happy": 2443,
+      "fear": 1491,
+      "angry": 2322,
+      "surprise": 1494
+    },
+    "dropped": 3584
+  },
+  "acted_speakers": 119,
+  "total_clips": 20012
+}

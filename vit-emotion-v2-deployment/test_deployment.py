@@ -22,6 +22,7 @@ import numpy as np
 import face_pipeline as fp
 from fusion import (
     EPSILON,
+    AudioEvidence,
     FusionConfig,
     FusionEngine,
     TextEvidence,
@@ -821,6 +822,171 @@ def test_temperature_softens_without_reordering():
 
     assert sharp.argmax() == soft.argmax(), "scaling changed the prediction"
     assert soft.max() < sharp.max(), "higher temperature should soften"
+
+
+# ============================================================
+# THE AUDIO LEG
+# ============================================================
+
+
+def audio_evidence(
+    vector: np.ndarray, voiced: float = 0.9, timestamp: float = 0.0
+):
+    return AudioEvidence(
+        probabilities=vector, voiced_ratio=voiced, timestamp=timestamp
+    )
+
+
+def test_audio_alone_produces_an_audio_only_result():
+    engine = FusionEngine()
+
+    result = engine.fuse(
+        None, 0.0, None, now=0.0,
+        audio_evidence=audio_evidence(peaked("sad", 0.8)),
+    )
+
+    assert result.mode == "audio_only", result.mode
+    assert result.label == "sad", result.label
+    assert abs(result.audio.influence - 1.0) < 1e-9
+
+
+def test_silent_window_contributes_nothing():
+    """A window below the voiced floor must not vote at all."""
+
+    engine = FusionEngine()
+
+    # Audio claims 'happy' with high confidence, but the window is
+    # 2% voiced - it is a pause, and the model's output for a pause
+    # is not evidence about the speaker's emotion.
+    result = engine.fuse(
+        peaked("sad", 0.7), 0.9,
+        None, now=0.0,
+        audio_evidence=audio_evidence(peaked("happy", 0.95), voiced=0.02),
+    )
+
+    assert result.mode == "face_only", result.mode
+    assert result.label == "sad", result.label
+    assert result.audio.influence == 0.0
+
+
+def test_stale_audio_decays_out_of_the_pool():
+    engine = FusionEngine()
+
+    fresh = engine.fuse(
+        peaked("sad", 0.6), 0.9, None, now=0.0,
+        audio_evidence=audio_evidence(peaked("happy", 0.9), timestamp=0.0),
+    )
+
+    # Past audio_cutoff_seconds the window contributes nothing and the
+    # result must collapse cleanly to face-only.
+    stale = engine.fuse(
+        peaked("sad", 0.6), 0.9, None, now=120.0,
+        audio_evidence=audio_evidence(peaked("happy", 0.9), timestamp=0.0),
+    )
+
+    assert fresh.mode == "fused", fresh.mode
+    assert stale.mode == "face_only", stale.mode
+    assert stale.label == "sad", stale.label
+
+
+def test_three_modalities_all_contribute():
+    engine = FusionEngine()
+
+    result = engine.fuse(
+        peaked("angry", 0.6), 0.9,
+        evidence(peaked("angry", 0.6)),
+        now=0.0,
+        audio_evidence=audio_evidence(peaked("angry", 0.6)),
+    )
+
+    assert result.mode == "fused", result.mode
+    assert result.label == "angry", result.label
+
+    shares = [
+        result.face.influence, result.audio.influence, result.text.influence
+    ]
+
+    assert all(share > 0 for share in shares), shares
+    assert abs(sum(shares) - 1.0) < 1e-9, shares
+
+    # Three agreeing modalities must be at least as confident as any
+    # one of them alone - that is the whole point of pooling.
+    assert result.confidence > 0.6, result.confidence
+
+
+def test_two_against_one_outvotes_the_dissenter():
+    """Audio joining face must be able to overturn a text-only call."""
+
+    engine = FusionEngine()
+
+    # The coalition has to be genuinely stronger than the dissenter,
+    # not merely larger. Text carries the highest base weight of the
+    # three, so a near-uniform face plus a lukewarm audio should NOT
+    # overturn a confident message - and does not.
+    face_and_text = engine.fuse(
+        peaked("sad", 0.65), 0.9,
+        evidence(peaked("happy", 0.80)),
+        now=0.0,
+    )
+
+    with_audio = engine.fuse(
+        peaked("sad", 0.65), 0.9,
+        evidence(peaked("happy", 0.80)),
+        now=0.0,
+        audio_evidence=audio_evidence(peaked("sad", 0.80)),
+    )
+
+    assert face_and_text.label == "happy", face_and_text.label
+    assert with_audio.label == "sad", with_audio.label
+
+
+def test_one_dissenting_modality_raises_the_conflict_flag():
+    engine = FusionEngine()
+
+    # Face and audio agree on 'sad'; text is confidently 'happy'.
+    # Averaging the three pairwise coefficients would dilute that
+    # disagreement, so the flag is any() over pairs.
+    result = engine.fuse(
+        peaked("sad", 0.9), 0.9,
+        evidence(peaked("happy", 0.9)),
+        now=0.0,
+        audio_evidence=audio_evidence(peaked("sad", 0.9)),
+    )
+
+    assert result.conflicted, result.agreement
+
+
+def test_trimodal_payload_names_every_modality():
+    engine = FusionEngine()
+
+    payload = engine.fuse(
+        peaked("fear", 0.5), 0.8,
+        evidence(peaked("fear", 0.5)),
+        now=0.0,
+        audio_evidence=audio_evidence(peaked("fear", 0.5)),
+    ).as_dict()
+
+    assert set(payload["weights"]) == {"face", "audio", "text"}
+    assert payload["audio"]["present"] is True
+    assert abs(sum(payload["weights"].values()) - 1.0) < 1e-3
+
+
+def test_two_modality_callers_are_unaffected():
+    """The pre-audio call signature must behave exactly as before."""
+
+    engine = FusionEngine()
+
+    # now=0.0 against a timestamp of 0.0: without it the default is
+    # wall-clock time.monotonic(), which makes the message hours old
+    # and decays it straight out of the pool.
+    result = engine.fuse(
+        peaked("happy", 0.7), 0.9, evidence(peaked("happy", 0.7)), now=0.0
+    )
+
+    assert result.mode == "fused", result.mode
+    assert result.audio.present is False
+    assert result.audio.influence == 0.0
+    assert abs(result.face.influence + result.text.influence - 1.0) < 1e-9
 
 
 # ============================================================
