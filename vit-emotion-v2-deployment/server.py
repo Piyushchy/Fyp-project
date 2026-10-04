@@ -145,6 +145,41 @@ TEXT_MODEL_PREFERENCE = [
 # you have the frame budget and want the small variance reduction.
 USE_TTA = False
 
+# ============================================================
+# NEUTRAL MARGIN
+# ============================================================
+#
+# Probability mass added to 'neutral' before the argmax. It fixes
+# a prior mismatch, not a modelling error: the calibration set is
+# balanced, a webcam session is roughly 55% neutral, and a model
+# carries whatever prior it was calibrated under. Measured on
+# eval_data_unseen/test/webcam under a realistic session prior,
+# neutral is shown 27.5% of the time against a true 55%, while
+# surprise runs at 2.08x its real rate and sad at 2.24x - and
+# because most frames are neutral, nearly every false 'surprise'
+# a user sees is a neutral face that leaked.
+#
+#   0.00  off. The default, and what every number in
+#         results_face_eval.*.json is measured at.
+#   0.15  neutral shown 39.7%, surprise 1.82x, balanced macro-F1
+#         0.4738 (against 0.5027 off)
+#   0.20  neutral shown 45.8%, surprise 1.62x, balanced macro-F1
+#         0.4669
+#
+# Off by default because it is a serving-time decision rule and
+# should not silently change what the evaluation harness reports.
+# Set EMOTION_NEUTRAL_MARGIN=0.18 to turn it on. See
+# diagnose_live_prior.py for the measurement and for why this
+# beats the textbook log-prior correction.
+# ============================================================
+
+NEUTRAL_MARGIN = float(os.environ.get("EMOTION_NEUTRAL_MARGIN", "0.0"))
+
+if not 0.0 <= NEUTRAL_MARGIN < 1.0:
+    raise SystemExit(
+        f"EMOTION_NEUTRAL_MARGIN must be in [0, 1), got {NEUTRAL_MARGIN}"
+    )
+
 # Use the GPU when one is available for it. Both modalities honour this.
 # Set EMOTION_DEVICE=cpu to force CPU, which is worth doing when
 # comparing latency numbers against the CPU-only figures in the README.
@@ -422,7 +457,15 @@ async def lifespan(_app: FastAPI):
         temperature=float(config.get("temperature", 1.0)),
         logit_bias=config.get("logit_bias"),
         use_tta=USE_TTA,
+        neutral_margin=NEUTRAL_MARGIN,
     )
+
+    if NEUTRAL_MARGIN > 0:
+        logger.info(
+            "Neutral margin: %.3f (corrects the balanced-calibration "
+            "prior for a mostly-neutral session)",
+            NEUTRAL_MARGIN,
+        )
 
     detector = build_detector()
 
@@ -613,6 +656,7 @@ async def video_ws(ws: WebSocket) -> None:
             "detector": runtime.detector_name,
             "crop_mode": CROP_MODE.value,
             "multicrop": USE_MULTICROP,
+            "neutral_margin": NEUTRAL_MARGIN,
             "landmarks": runtime.detector_name != "haar",
             "text_model": runtime.text_model_name,
             "text_task": runtime.text_task,
@@ -806,6 +850,7 @@ async def health() -> dict[str, Any]:
         "detector": runtime.detector_name,
         "crop_mode": CROP_MODE.value,
         "multicrop": USE_MULTICROP,
+        "neutral_margin": NEUTRAL_MARGIN,
         "landmarks": runtime.detector_name != "haar",
         "tta": USE_TTA,
         "face_provider": runtime.face_provider,

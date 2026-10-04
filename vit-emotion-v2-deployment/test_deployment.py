@@ -825,6 +825,108 @@ def test_temperature_softens_without_reordering():
 
 
 # ============================================================
+# THE NEUTRAL MARGIN
+# ============================================================
+
+
+def margin_classifier(margin: float):
+    """An EmotionClassifier with no ONNX session behind it.
+
+    Only _apply_neutral_margin is under test, and it touches nothing
+    but the probability vector, so constructing the real thing (and
+    loading 343 MB of weights) would test the same arithmetic slower.
+    """
+
+    return fp.EmotionClassifier(
+        session=None,
+        input_name="pixel_values",
+        image_size=224,
+        mean=np.array([0.5] * 3, dtype=np.float32),
+        std=np.array([0.5] * 3, dtype=np.float32),
+        temperature=1.0,
+        use_tta=False,
+        neutral_margin=margin,
+    )
+
+
+def test_zero_margin_leaves_the_distribution_untouched():
+    """The default must be a no-op, or every stored benchmark moves."""
+
+    classifier = margin_classifier(0.0)
+
+    before = peaked("surprise", 0.4)
+    after = classifier._apply_neutral_margin(before)
+
+    assert np.allclose(before, after), after
+
+
+def test_margin_flips_a_near_tie_to_neutral():
+    classifier = margin_classifier(0.15)
+
+    # Neutral is the runner-up, 0.08 behind. Inside the margin.
+    probabilities = np.array([0.02, 0.02, 0.02, 0.02, 0.40, 0.04, 0.48])
+
+    adjusted = classifier._apply_neutral_margin(probabilities)
+
+    assert SHARED_LABELS[int(np.argmax(probabilities))] == "surprise"
+    assert SHARED_LABELS[int(np.argmax(adjusted))] == "neutral"
+
+
+def test_margin_leaves_a_confident_rare_class_alone():
+    """This is why the margin is additive in probability space.
+
+    A log-prior correction strong enough to fix the neutral rate also
+    drives disgust to never being predicted. Adding a constant only
+    decides near-ties, so a confident disgust survives.
+    """
+
+    classifier = margin_classifier(0.20)
+
+    probabilities = peaked("disgust", 0.75)
+    adjusted = classifier._apply_neutral_margin(probabilities)
+
+    assert SHARED_LABELS[int(np.argmax(adjusted))] == "disgust"
+
+
+def test_margin_is_equivalent_to_the_runner_up_rule():
+    """Adding m to neutral == 'pick neutral when within m of the top'.
+
+    The equivalence is the whole justification for implementing it as a
+    distribution transform rather than a post-hoc label override: it
+    keeps the stored vector and the displayed label consistent, which
+    matters because fusion pools the vector.
+    """
+
+    margin = 0.18
+    classifier = margin_classifier(margin)
+    generator = np.random.default_rng(0)
+
+    neutral_index = SHARED_LABEL2ID["neutral"]
+
+    for _ in range(500):
+        probabilities = generator.dirichlet(np.ones(NUM_SHARED_LABELS))
+
+        transformed = int(np.argmax(classifier._apply_neutral_margin(probabilities)))
+
+        rule = (
+            neutral_index
+            if probabilities[neutral_index] >= probabilities.max() - margin
+            else int(np.argmax(probabilities))
+        )
+
+        assert transformed == rule, (probabilities, transformed, rule)
+
+
+def test_margin_output_is_still_a_distribution():
+    classifier = margin_classifier(0.25)
+
+    adjusted = classifier._apply_neutral_margin(peaked("fear", 0.5))
+
+    assert abs(adjusted.sum() - 1.0) < 1e-9
+    assert (adjusted >= 0).all()
+
+
+# ============================================================
 # THE AUDIO LEG
 # ============================================================
 

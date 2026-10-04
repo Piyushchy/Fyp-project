@@ -53,7 +53,7 @@ from typing import Any, Sequence
 import cv2
 import numpy as np
 
-from labels import NUM_SHARED_LABELS, SHARED_LABELS
+from labels import NUM_SHARED_LABELS, SHARED_LABEL2ID, SHARED_LABELS
 
 
 # ============================================================
@@ -869,6 +869,7 @@ class EmotionClassifier:
         temperature: float = 1.0,
         logit_bias: Sequence[float] | None = None,
         use_tta: bool = True,
+        neutral_margin: float = 0.0,
     ):
         self.session = session
         self.input_name = input_name
@@ -889,6 +890,64 @@ class EmotionClassifier:
         )
 
         self.use_tta = use_tta
+
+        # ----------------------------------------------------
+        # NEUTRAL MARGIN
+        # ----------------------------------------------------
+        #
+        # Probability mass added to 'neutral' before the argmax, to
+        # correct a prior mismatch rather than a modelling error.
+        #
+        # The calibration set is balanced - one face in seven is a
+        # disgust face. A webcam session is not: the user is neutral
+        # most of the time. A classifier carries the prior it was
+        # calibrated under, so every rare class is over-emitted by
+        # roughly the ratio between assumed and real prevalence, and
+        # because most frames are neutral, almost every false
+        # 'surprise' is a neutral face that leaked. Measured on
+        # eval_data_unseen/test/webcam under a 55% neutral session,
+        # neutral is shown 27.5% of the time against a true 55%,
+        # while surprise runs 2.08x and sad 2.24x.
+        #
+        # Adding m to neutral's probability is exactly equivalent to
+        # the rule "choose neutral when it is within m of the winner":
+        # neutral wins iff p[neutral] + m >= max of the others, which
+        # is the same test. Renormalising afterwards cannot reorder
+        # anything, so the stored distribution and the label always
+        # agree - which matters because fusion.py pools the vector,
+        # not the argmax.
+        #
+        # Why additive in PROBABILITY and not a log-prior shift
+        # ----------------------------------------------------
+        # The textbook correction is log(p_live / p_fitted) on the
+        # logits. Measured here, it reaches the same session accuracy
+        # but costs ~4 more points of balanced macro-F1 and drives
+        # disgust to never being predicted at all. A log-space shift
+        # is multiplicative, so it moves confident predictions as hard
+        # as uncertain ones; adding a constant in probability space
+        # only decides near-ties, which is precisely the population of
+        # frames that is wrong. Rare classes survive because a
+        # confident disgust is unaffected by a small additive term.
+        #
+        # 0.0 disables it, which is the default: the benchmark numbers
+        # in results_face_eval.*.json are measured without it, and a
+        # serving-time decision rule should not silently change what
+        # the evaluation harness reports. 0.15-0.20 is the measured
+        # operating range. See diagnose_live_prior.py.
+        # ----------------------------------------------------
+
+        self.neutral_margin = max(0.0, float(neutral_margin))
+
+    def _apply_neutral_margin(self, probabilities: np.ndarray) -> np.ndarray:
+        """Add the margin to 'neutral' and renormalise."""
+
+        if self.neutral_margin <= 0.0:
+            return probabilities
+
+        adjusted = probabilities.copy()
+        adjusted[..., SHARED_LABEL2ID["neutral"]] += self.neutral_margin
+
+        return adjusted / adjusted.sum(axis=-1, keepdims=True)
 
     def preprocess(self, face_bgr: np.ndarray) -> np.ndarray:
         """BGR crop -> normalised CHW float32 tensor."""
@@ -924,7 +983,11 @@ class EmotionClassifier:
     def predict_many(self, crops: Sequence[np.ndarray]) -> np.ndarray:
         """Calibrated probabilities from a multi-crop ensemble."""
 
-        return softmax(self.logits_many(crops) / self.temperature + self.logit_bias)
+        return self._apply_neutral_margin(
+            softmax(
+                self.logits_many(crops) / self.temperature + self.logit_bias
+            )
+        )
 
     def logits(self, face_bgr: np.ndarray) -> np.ndarray:
         """Uncalibrated averaged logits, exposed for temperature fitting."""
@@ -954,7 +1017,7 @@ class EmotionClassifier:
 
         calibrated = self.logits(face_bgr) / self.temperature + self.logit_bias
 
-        return softmax(calibrated)
+        return self._apply_neutral_margin(softmax(calibrated))
 
 
 # ============================================================

@@ -128,6 +128,69 @@ environment mediapipe 0.10.35 under Python 3.14 ships only
 silently took the Haar path** — which is why `mediapipe_confidence`
 always rendered as `—`.
 
+### Why a live session over-calls surprise and sad
+
+The benchmark says the model is roughly even-handed. A webcam session
+says otherwise, and both are right — the gap between them is the bug.
+
+Every number above is measured on a **balanced** set: one face in seven
+is a disgust face. A session is not balanced. Someone at a laptop is
+neutral most of the time. A classifier carries the prior it was
+calibrated under, so each rare class is over-emitted by roughly the
+ratio between the assumed and the real rate.
+
+Simulating a realistic session (55% neutral, 20% happy, 2% disgust)
+over `eval_data_unseen/test/webcam`:
+
+| class | true | shown | inflation |
+|---|---|---|---|
+| neutral | 55.0% | **27.5%** | 0.50x |
+| surprise | 8.0% | 16.7% | **2.08x** |
+| sad | 8.0% | 17.9% | **2.24x** |
+| fear | 3.0% | 8.9% | **2.95x** |
+| disgust | 2.0% | 0.7% | 0.34x |
+
+Half of all neutral frames get relabelled, and because neutral is most
+of the session, nearly every false `surprise` the user sees is a
+neutral face that leaked. Note that **disgust is under-predicted**, not
+over — it fires 11 times in 344 faces.
+
+The root cause is neutral's recall of 0.449: it leaks to sad (18%),
+surprise (18%) and fear (10%). Not an imbalance problem — neutral is
+the *largest* training class at 28,221 images. It is weak because
+FER2013's neutral is a "none of the above" bucket that overlaps mild
+sad and surprise. Disgust's F1 of 0.197 *is* imbalance: 3,346 images.
+
+### The neutral margin
+
+`EMOTION_NEUTRAL_MARGIN=0.18` adds that much probability mass to
+`neutral` before the argmax. That is exactly equivalent to "choose
+neutral when it is within *m* of the winner", and it is applied to the
+distribution rather than to the label so that fusion — which pools the
+vector, not the argmax — stays consistent with what the UI shows.
+
+| margin | session acc | balanced macro-F1 | neutral shown | surprise |
+|---|---|---|---|---|
+| 0.00 (default) | 0.5670 | 0.5027 | 27.5% | 2.08x |
+| 0.15 | 0.5981 | 0.4738 | 39.7% | 1.82x |
+| 0.18 | 0.6150 | 0.4693 | 43.0% | 1.78x |
+| 0.20 | 0.6324 | 0.4669 | 45.8% | 1.62x |
+
+On six held-out neutral faces, the margin off calls four of them `sad`;
+at 0.18 all of them read `neutral`.
+
+**Why additive in probability rather than a log-prior correction.** The
+textbook fix is adding `log(p_live / p_fitted)` to the logits. Measured
+here it reaches the same session accuracy but costs ~4 more points of
+balanced macro-F1 and drives disgust to *never* being predicted. A
+log-space shift is multiplicative, so it moves confident predictions as
+hard as uncertain ones; a constant in probability space only decides
+near-ties — which is exactly the population of frames that is wrong.
+
+Off by default: it is a serving-time decision rule, and it should not
+silently change what the evaluation harness reports. Reproduce with
+`python diagnose_live_prior.py --data eval_data_unseen/test/webcam`.
+
 ### The actual problem: cross-dataset generalisation
 
 | dataset | accuracy | |
