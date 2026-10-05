@@ -1,9 +1,9 @@
 # Presentation script - Sept eval, multimodal emotion recognition
 
-25 slides, about 24 minutes spoken, which leaves room for questions in a 30-minute slot.
+25 slides, about 27 minutes spoken, which leaves room for questions in a 30-minute slot.
 The same text is embedded as PowerPoint speaker notes, so it is visible in Presenter View.
 
-**Long slides (2 min each):** 8, 13, 14, 22, 23. Everything else is 20-90 seconds.
+**Long slides (2-3 min each):** 8, 13, 14, 15, 16, 22, 23. Everything else is 20-90 seconds.
 
 **The one thing not to forget:** slides 6 and 7 describe the earlier encoder study (MentalBERT / WavLM / DINOv2). Only WavLM reached the built system. Say so on slide 6 and reconcile it on slide 14 - if a panel member spots it first, it reads as inflation rather than iteration.
 
@@ -437,57 +437,140 @@ audit your own work.
 
 ---
 
-## Slide 15 - Rebuilding the Audio Corpus
+## Slide 15 - Audio: the data
 
-REBUILDING THE AUDIO CORPUS (75s)
+AUDIO, PART 1 - THE DATA (2 min)
 
-This slide is about a problem we inherited and had to fix before any
-audio number meant anything.
+Start with the task, in one sentence: "For voice, we take about four
+seconds of someone talking and ask which of seven emotions it sounds
+like - not WHAT they said, but HOW they said it: pitch, loudness, speed,
+pauses, strain in the voice."
 
-The earlier branch shipped an audio model that had never been trained -
-the notebook stopped before the training cell - on a corpus missing two
-of the seven emotions. No neutral and no disgust, and an 8.6-to-1
-imbalance on surprise. A model that cannot emit "neutral" will label
-silence as whatever its prior favours, on every single frame. Neutral is
-the resting state of a real consultation, so that is fatal, not
-cosmetic.
+To teach a model that, you need recordings someone has already labelled.
+We combined four public collections, about 23,000 clips:
 
-So we rebuilt it from four corpora - CREMA-D, RAVDESS, SAVEE and MELD -
-about 23,000 clips covering all seven classes.
+ - CREMA-D, RAVDESS and SAVEE: actors in a studio performing the same
+   sentences in different emotions. Clean and clearly labelled, but
+   acted.
+ - MELD: clips cut from the TV show Friends. Real conversation,
+   overlapping voices, a laugh track, background noise. Messy, but much
+   closer to a real consultation.
 
-The methodological point is the caption, and I want to dwell on it. We
-split by SPEAKER, not by clip. Every acted corpus has each actor perform
-every emotion on the same sentences. If you split randomly, the same
-actor's voice appears in train and test, and the model can score by
-recognising the voice rather than the emotion. That is worth fifteen to
-twenty-five points, and it is why a lot of published speech-emotion
-numbers look high. Our numbers are lower than the literature partly
-because of this choice, and we would make it again.
+We used both on purpose. Studio data teaches the model what each emotion
+sounds like when it is clear. MELD tells us whether it still works when
+it is not.
+
+WHY ALL SEVEN EMOTIONS MATTERS. Our first attempt used a narrower set:
+five emotions, no neutral, no disgust. Neutral is what most of a real
+consultation sounds like. A model that has never heard calm speech has
+nowhere to put it, so it forces every calm moment into one of the
+emotions it does know. Covering all seven was not tidiness, it was the
+difference between a model that can rest and one that cannot.
+
+WHY WE SPLIT BY SPEAKER (the most important point on this slide). In
+acted datasets, every actor says the same sentences in every emotion. If
+you shuffle clips randomly, the same person ends up in both training and
+testing, and the model can score well just by recognising "that is actor
+twelve's voice". It is memorising people, not learning emotion. A
+speaker-disjoint split means every voice in the test set is someone the
+model has never heard. The numbers come out lower, but they are the
+numbers you would get on a NEW patient - which is the only case we care
+about. This one choice is a big part of why published speech-emotion
+figures often look higher than ours.
+
+ONE MORE DETAIL. We normalise the loudness of every clip. Datasets are
+recorded at different volumes - SAVEE is loud, MELD is quiet under the
+laugh track. Without this, the model could learn "quiet means MELD" and
+identify the dataset instead of the emotion.
 
 ---
 
-## Slide 16 - Audio Modality - Results
+## Slide 16 - Audio: the model and the result
 
-AUDIO RESULTS (75s)
+AUDIO, PART 2 - THE MODEL AND THE RESULT (3 min)
 
-Speaker-disjoint test split, 4,179 clips, seven classes, so chance is
-14.3%.
+Two models, same data, same speaker-disjoint split. Only the model
+changes.
 
-The baseline bar is the earlier branch's own MFCC CNN architecture,
-imported unchanged and retrained on the same rebuilt data. Same data,
-same splits - so the 17.7-point gap isolates the model from the
-dataset. 0.322 macro-F1 to 0.499.
+THE BASELINE: MFCC + a small CNN. MFCC stands for Mel-frequency cepstral
+coefficients. It is a hand-designed summary of sound: cut the audio into
+tiny slices and describe each slice with 40 numbers that capture its
+spectral shape, on a scale that mimics how human hearing works. Laid
+side by side, those numbers make a picture - time across, frequency
+down - and a small CNN, about 390,000 parameters, looks for patterns in
+that picture. It is very fast, about half a millisecond. The weakness is
+that the summary is fixed. Someone decided in advance what to keep, and
+subtle cues like vocal strain or how pitch rises and falls can be thrown
+away before the model ever sees them.
 
-Now the part I would rather you hear from me than find in the appendix.
-The averaged number hides the real finding. Broken out by domain: 69.4%
-accuracy on acted studio speech, 35.6% on MELD - real dialogue from a TV
-show, with background noise and a laugh track. Studio speech works. A
-noisy room is still hard.
+OUR CHOICE: WavLM-base-plus. WavLM is a speech transformer from
+Microsoft. Before it ever saw an emotion label, it was pre-trained on
+about 94,000 hours of speech with a fill-in-the-blank task: hide small
+chunks of the audio and make the model work out what was missing. The
+training audio was also deliberately mixed with noise and overlapping
+voices, so it is built to cope with messy conditions - which is exactly
+what a video call is.
 
-And the fusion is told the harder number. The per-class reliabilities we
-feed the pool come from the wild domain, not the acted one, so the
-system does not over-trust the voice in exactly the conditions a real
-consultation resembles.
+To do that task well, the model has to learn how speech works: pitch,
+rhythm, timbre, pauses. So by the time it reaches us it already
+understands voices. Our 4,179 test clips and the training set behind
+them could never teach that from scratch. All we teach it is which
+patterns mean which emotion. That is the whole reason to use a
+pre-trained model: we are borrowing 94,000 hours of listening.
+
+HOW WE FINE-TUNE IT, in plain terms:
+ - the low-level audio front end stays frozen;
+ - the transformer is nudged gently, with a small learning rate, so it
+   does not forget what it knows;
+ - the new classification layer on top learns faster, because it starts
+   from nothing.
+
+And instead of reading only the last layer, we let the model learn a
+weighted blend of all its layers. Different layers hold different
+information: the top layers are tuned to the pre-training task of
+predicting what was said, so they tend to keep less of how it was said.
+The learned blend leans mildly toward the middle-to-upper layers rather
+than the very top, which is what you would expect.
+
+THE RESULT. Macro-F1 goes from 0.322 to 0.499, a 17.7-point gap. Because
+the data and the split are identical, that gap belongs to the model
+alone. Say what macro-F1 is: the average of the per-emotion scores, so
+every emotion counts equally. We use it because neutral is nearly half
+of MELD - a lazy model that always answered "neutral" would look
+respectable on plain accuracy and score about 0.09 on macro-F1. Chance
+level for seven classes is 14.3%.
+
+THE HONEST PART. Averaged, the number hides the real finding. On acted
+studio speech the model is right about 69% of the time. On real
+conversation it is about 36%. Studio speech works; a noisy room is still
+hard - and humans disagree about emotion in TV dialogue too. The weakest
+classes are fear and disgust, which have very few examples in real
+speech (50 and 68 test clips), so the model barely learns them.
+
+HOW THE SYSTEM USES THIS. The fusion is given the harder, real-speech
+numbers, not the studio ones, so it does not over-trust the voice in
+exactly the conditions a consultation resembles. It also only counts the
+voice while someone is actually speaking, and a reading fades within
+seconds so a stale one cannot linger.
+
+COST. About 95 million parameters, about 16 milliseconds per four-second
+window, scored roughly once a second. Cheap enough to run live. It is
+also the heaviest of our three models in memory, so it only loads if the
+microphone is used.
+
+IF ASKED:
+ - "Why WavLM and not another speech model?" We measured it against the
+   classic MFCC approach. We did not benchmark other pre-trained speech
+   models, so do not claim it beats them. We chose WavLM because it was
+   built for noisy, overlapping speech and was evaluated across the
+   standard SUPERB speech benchmark, which includes emotion recognition.
+   Comparing others is future work.
+ - "36% is below always guessing neutral (48%)." True for plain
+   accuracy, which is why we report macro-F1. The model is trained with
+   class weights so it does not collapse onto neutral; macro-F1 of 0.25
+   on real speech against about 0.09 for always-neutral.
+ - "Papers report 90%+." Mostly random clip splits, where the same
+   speaker is in training and test. Ours are speaker-disjoint.
 
 ---
 
