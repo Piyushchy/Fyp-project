@@ -1,13 +1,16 @@
 """
 Rebuild Sept_eval_1_multimodal.pptx with the slides the September review
-left open:
+left open.
 
-  * a Technology Stack slide                      (new, after User Flow)
-  * a Why These Models slide                      (new, after Why Three Modalities)
-  * a Label Stability slide                       (new, after Inside the Interface)
-  * Future Scope                                  (was an empty title)
+Added, in presentation order:
 
-and speaker notes on every slide.
+  11  Technology Stack              what it is built from
+  13  Meet the Three Encoders       what each model IS, in plain language
+  14  Why These, Not the Others     what each was measured against
+  22  The Label Will Not Sit Still  the live output's real weakness
+
+and Future Scope, which was an empty title, plus speaker notes on every
+slide (added separately by add_notes.py).
 
 The deck is hand-authored in Canva and has no usable layouts - every
 slide is 'Blank' with its decoration drawn as four freeform groups. So
@@ -22,9 +25,7 @@ Usage:
 
 from __future__ import annotations
 
-import copy
 import re
-import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -39,15 +40,16 @@ TITLE_BLUE = "004AAD"      # every content-slide title
 BODY_INK = "1E2936"        # every body paragraph
 BRAND_RED = "A42530"       # the Canva template's own accent
 
-# Column accents. The deck already uses these three to mean
-# face / voice / text, so they are kept pointing at the same ideas.
+# The deck already uses these three to mean face / voice / text, so they
+# are kept pointing at the same ideas.
 BLUE = "1C9CC0"
 AMBER = "B06E00"
 PURPLE = "7A5EA6"
 
 # Pale card fills: a 20% luminance tint of a theme accent, which is how
 # the existing cards are filled.
-FILL_FOR = {BLUE: "accent1", AMBER: "accent2", PURPLE: "accent4", BRAND_RED: "accent2"}
+FILL_FOR = {BLUE: "accent1", AMBER: "accent2", PURPLE: "accent4",
+            BRAND_RED: "accent2"}
 
 HEAD_FONT = "Canva Sans Bold"
 BODY_FONT = "Canva Sans"
@@ -67,16 +69,28 @@ def emu(inches: float) -> int:
 
 
 def esc(text: str) -> str:
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 # ============================================================
 # SHAPE BUILDERS
 # ============================================================
+#
+# A paragraph is {runs, align, space_before}; a run is
+# {text, size, bold, color}. The `text`/`size`/`bold` shorthand on a
+# paragraph builds a single run, because most paragraphs have one.
+# ============================================================
+
+
+def _runs_of(para: dict) -> list[dict]:
+    if "runs" in para:
+        return para["runs"]
+    return [{
+        "text": para["text"],
+        "size": para["size"],
+        "bold": para.get("bold", False),
+        "color": para.get("color", BODY_INK),
+    }]
 
 
 def _text_shape(
@@ -89,9 +103,6 @@ def _text_shape(
     paragraphs: list[dict],
     fill: str | None = None,
 ) -> str:
-    """One text box. `paragraphs` is a list of
-    {text, size, bold, color, align, space_before}."""
-
     fill_xml = (
         f'<a:solidFill><a:schemeClr val="{fill}">'
         f'<a:lumMod val="20000"/><a:lumOff val="80000"/>'
@@ -104,24 +115,33 @@ def _text_shape(
     for para in paragraphs:
         align = para.get("align", "l")
         before = para.get("space_before", 0)
-        size = int(para["size"] * 100)
-        bold = "1" if para.get("bold") else "0"
-        font = HEAD_FONT if para.get("bold") else BODY_FONT
-        color = para.get("color", BODY_INK)
 
-        run = ""
-        if para["text"]:
-            run = (
+        rendered = ""
+        last = None
+        for run in _runs_of(para):
+            if not run["text"]:
+                continue
+            size = int(run["size"] * 100)
+            bold = "1" if run.get("bold") else "0"
+            font = HEAD_FONT if run.get("bold") else BODY_FONT
+            color = run.get("color", BODY_INK)
+            rendered += (
                 f'<a:r><a:rPr lang="en-US" sz="{size}" b="{bold}" dirty="0">'
                 f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill>'
                 f'<a:latin typeface="{font}"/></a:rPr>'
-                f"<a:t>{esc(para['text'])}</a:t></a:r>"
+                f"<a:t>{esc(run['text'])}</a:t></a:r>"
             )
+            last = (size, bold, font, color)
 
+        if last is None:
+            first = _runs_of(para)[0]
+            last = (int(first["size"] * 100), "0", BODY_FONT, BODY_INK)
+
+        size, bold, font, color = last
         body.append(
             f'<a:p><a:pPr algn="{align}">'
             f'<a:spcBef><a:spcPts val="{before}"/></a:spcBef></a:pPr>'
-            f"{run}"
+            f"{rendered}"
             f'<a:endParaRPr lang="en-US" sz="{size}" b="{bold}" dirty="0">'
             f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill>'
             f'<a:latin typeface="{font}"/></a:endParaRPr></a:p>'
@@ -139,7 +159,8 @@ def _text_shape(
     )
 
 
-def _rule(shape_id: int, name: str, x: float, y: float, w: float, color: str) -> str:
+def _rule(shape_id: int, name: str, x: float, y: float, w: float,
+          color: str) -> str:
     """The thin accent rule the deck draws above each card."""
 
     return (
@@ -151,7 +172,7 @@ def _rule(shape_id: int, name: str, x: float, y: float, w: float, color: str) ->
         f'<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
         f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill>'
         f"<a:ln><a:noFill/></a:ln><a:effectLst/></p:spPr>"
-        f"<p:txBody><a:bodyPr rtlCol=\"0\" anchor=\"ctr\"/><a:lstStyle/>"
+        f'<p:txBody><a:bodyPr rtlCol="0" anchor="ctr"/><a:lstStyle/>'
         f'<a:p><a:pPr algn="ctr"/><a:endParaRPr/></a:p></p:txBody></p:sp>'
     )
 
@@ -160,11 +181,11 @@ def _rule(shape_id: int, name: str, x: float, y: float, w: float, color: str) ->
 # TEXT FITTING
 # ============================================================
 #
-# LibreOffice cannot render in the build container, so card heights are
+# LibreOffice cannot render in the build container, so box heights are
 # checked arithmetically instead of visually. Canva Sans is a humanist
 # sans of roughly Open Sans' metrics: ~0.50 em average advance for mixed
 # case prose, 1.22 em line height. Both are deliberate over-estimates,
-# so a card that fits here fits in PowerPoint.
+# so a box that fits here fits in PowerPoint.
 # ============================================================
 
 CHAR_EM = 0.50
@@ -175,45 +196,34 @@ PAD = 0.18          # bodyPr default inset, both sides, in inches
 def text_height(paragraphs: list[dict], width: float) -> float:
     total = 0.0
     for para in paragraphs:
-        size_in = para["size"] / 72.0
+        runs = _runs_of(para)
+        chars = sum(len(r["text"]) for r in runs)
+        size = max(r["size"] for r in runs)
+        size_in = size / 72.0
         usable = width - 2 * PAD
         per_line = max(1, int(usable / (size_in * CHAR_EM)))
-        lines = max(1, -(-len(para["text"]) // per_line))
+        lines = max(1, -(-chars // per_line))
         total += lines * size_in * LINE_EM
         total += para.get("space_before", 0) / 100.0 / 72.0
-    return total + 0.10
+    return total + 0.12
 
 
-def card(
-    ids: list[int],
-    column: int,
-    y: float,
-    height: float,
-    accent: str,
-    heading: str,
-    body: str,
-    heading_size: float = 26,
-    body_size: float = 16,
-) -> tuple[str, float]:
-    """Accent rule + filled card, returned with the height it needs."""
+def labelled(label: str, text: str, accent: str, size: float = 15,
+             space_before: int = 500) -> dict:
+    """'Label — body text', the label bold in the card's accent colour.
 
-    x = COL_X[column]
-    paragraphs = [
-        {"text": heading, "size": heading_size, "bold": True,
-         "color": accent, "align": "ctr"},
-        {"text": body, "size": body_size, "color": BODY_INK,
-         "space_before": 900},
-    ]
+    Short labelled lines read from the back of a room; a paragraph of
+    prose in a card does not. Every new card on these slides uses them.
+    """
 
-    needed = text_height(paragraphs, COL_W)
-    used = max(height, needed)
-
-    xml = _rule(ids[0], f"Rule {ids[0]}", x, y - 0.20, COL_W, accent)
-    xml += _text_shape(
-        ids[1], f"Card {ids[1]}", x, y, COL_W, used, paragraphs,
-        fill=FILL_FOR[accent],
-    )
-    return xml, used
+    return {
+        "runs": [
+            {"text": f"{label}  ", "size": size, "bold": True,
+             "color": accent},
+            {"text": text, "size": size, "color": BODY_INK},
+        ],
+        "space_before": space_before,
+    }
 
 
 # ============================================================
@@ -222,8 +232,6 @@ def card(
 
 
 class SlideBuilder:
-    """Builds one slide on the decoration cloned from the template slide."""
-
     def __init__(self, scaffold: str, title: str, subtitle: str | None = None):
         self.scaffold = scaffold
         self.next_id = 100
@@ -241,48 +249,48 @@ class SlideBuilder:
         self.body += xml
         self.max_y = max(self.max_y, bottom)
 
-    def text(
-        self,
-        x: float,
-        y: float,
-        w: float,
-        paragraphs: list[dict],
-        name: str = "Text",
-    ) -> None:
+    def text(self, x: float, y: float, w: float, paragraphs: list[dict],
+             name: str = "Text") -> float:
         height = text_height(paragraphs, w)
         (shape_id,) = self.ids()
-        self.add(
-            _text_shape(shape_id, f"{name} {shape_id}", x, y, w, height,
-                        paragraphs),
-            y + height,
-        )
+        self.add(_text_shape(shape_id, f"{name} {shape_id}", x, y, w, height,
+                             paragraphs), y + height)
+        return y + height
 
-    def cards(self, y: float, height: float, items: list[tuple[str, str, str]],
-              heading_size: float = 26, body_size: float = 16) -> float:
-        """Three columns of (accent, heading, body). Returns the row bottom."""
+    def cards(self, y: float, items: list[dict], heading_size: float = 24)  -> float:
+        """Three columns. Each item is {accent, heading, lines}.
 
-        tallest = height
-        pieces = []
-        for column, (accent, heading, body) in enumerate(items):
-            xml, used = card(self.ids(2), column, y, height, accent,
-                             heading, body, heading_size, body_size)
-            pieces.append(xml)
-            tallest = max(tallest, used)
+        Rendered twice: once to find the tallest, once at a common height
+        so the three cards bottom out together.
+        """
 
-        # Re-emit at a common height so the three cards align.
-        self.next_id -= 2 * len(items)
-        for column, (accent, heading, body) in enumerate(items):
-            xml, _ = card(self.ids(2), column, y, tallest, accent,
-                          heading, body, heading_size, body_size)
-            self.add(xml, y + tallest)
+        def paragraphs_for(item: dict) -> list[dict]:
+            return [
+                {"text": item["heading"], "size": heading_size, "bold": True,
+                 "color": item["accent"], "align": "ctr"},
+            ] + item["lines"]
+
+        tallest = max(text_height(paragraphs_for(i), COL_W) for i in items)
+
+        for column, item in enumerate(items):
+            rule_id, card_id = self.ids(2)
+            self.add(_rule(rule_id, f"Rule {rule_id}", COL_X[column],
+                           y - 0.20, COL_W, item["accent"]), y)
+            self.add(_text_shape(card_id, f"Card {card_id}", COL_X[column], y,
+                                 COL_W, tallest, paragraphs_for(item),
+                                 fill=FILL_FOR[item["accent"]]), y + tallest)
 
         return y + tallest
 
+    def row(self, y: float, columns: list[tuple[float, float, dict]]) -> float:
+        """One row of a comparison grid: (x, width, paragraph)."""
+
+        bottom = y
+        for x, width, para in columns:
+            bottom = max(bottom, self.text(x, y, width, [para], name="Cell"))
+        return bottom
+
     def render(self) -> str:
-        # 0.85in is what one 40pt line actually occupies. The original
-        # slides declare 1.35 and rely on spAutoFit to shrink it on open;
-        # declaring the real height keeps the static geometry honest for
-        # the overlap check, and renders identically.
         head = _text_shape(
             10, "TextBox Title", CONTENT_LEFT, 0.52, CONTENT_WIDTH, 0.85,
             [{"text": self.title, "size": 40, "bold": True,
@@ -296,9 +304,7 @@ class SlideBuilder:
                 [{"text": self.subtitle, "size": 17, "color": BODY_INK}],
             )
 
-        return self.scaffold.replace(
-            "<!--BODY-->", head + sub + self.body
-        )
+        return self.scaffold.replace("<!--BODY-->", head + sub + self.body)
 
     def check(self, label: str) -> None:
         if self.max_y > SAFE_BOTTOM:
@@ -309,6 +315,18 @@ class SlideBuilder:
         print(f"  {label}: lowest content at y={self.max_y:.2f}in")
 
 
+def footer(slide: SlideBuilder, y: float, heading: str, text: str,
+           color: str = BODY_INK) -> None:
+    slide.text(
+        CONTENT_LEFT, y, CONTENT_WIDTH,
+        [
+            {"text": heading, "size": 20, "bold": True, "color": color},
+            {"text": text, "size": 16, "space_before": 500},
+        ],
+        name="Footer",
+    )
+
+
 # ============================================================
 # CONTENT
 # ============================================================
@@ -316,223 +334,333 @@ class SlideBuilder:
 # Every figure below is quoted from a committed result file on
 # multimodal-v7-audio and is named in the speaker notes:
 #
-#   audio-emotion-module/results/benchmark.json
-#   audio-emotion-module/results/multimodal.json
-#   text-emotion-module/results/benchmark.json, tables.md
+#   audio-emotion-module/results/benchmark.json, multimodal.json
+#   text-emotion-module/results/tables.md
 #   vit-emotion-v2-deployment/results_face_eval.v4.unseen_test.json
 #   vit-emotion-v2-deployment/results_live_prior.json
-#   vit-emotion-v2-deployment/reliability.json
+#   vit-emotion-v2-deployment/reliability.json, face_pipeline.py
+#   training/README.md
 # ============================================================
 
 
-def build_tech_stack(scaffold: str) -> tuple[str, str]:
+def build_tech_stack(scaffold: str) -> str:
     slide = SlideBuilder(
         scaffold,
         "Technology Stack",
-        "Three models, one process, no framework on the client - every "
-        "choice sized to run on a single machine with one GPU.",
+        "Three models, one Python process, no framework on the client - "
+        "every choice sized to run on a single machine.",
     )
 
-    bottom = slide.cards(
-        3.15,
-        4.30,
-        [
-            (
-                BLUE,
-                "Train",
-                "PyTorch 2.x with HuggingFace Transformers for all three "
-                "encoders. The face ViT is fine-tuned from "
-                "google/vit-base-patch16-224-in21k over four merged corpora; "
-                "WavLM-base+ and TinyBERT are fine-tuned in the same "
-                "framework. librosa and soundfile condition audio, "
-                "scikit-learn computes every metric, and one RTX 4060 did "
-                "all of the training.",
-            ),
-            (
-                AMBER,
-                "Serve",
-                "FastAPI and Uvicorn behind a single WebSocket that carries "
-                "video frames, 16 kHz PCM and typed text on one connection. "
-                "The face ViT runs through ONNX Runtime on the CUDA provider "
-                "and falls back to CPU; WavLM and TinyBERT stay in PyTorch. "
-                "OpenCV's YuNet detector supplies the five landmarks the "
-                "aligned crop needs. The pool itself is NumPy.",
-            ),
-            (
-                PURPLE,
-                "Show",
-                "The client is one HTML file - no framework, no build step. "
-                "getUserMedia and a canvas produce Base64 JPEG frames paced "
-                "on server acknowledgements; an AudioWorklet produces mono "
-                "16 kHz windows. Every fusion constant lives in "
-                "reliability.json as data, so a weight can be retuned and "
-                "cited without touching code.",
-            ),
-        ],
-    )
+    bottom = slide.cards(3.15, [
+        {
+            "accent": BLUE,
+            "heading": "Train",
+            "lines": [
+                labelled("Framework", "PyTorch 2.x + HuggingFace Transformers",
+                         BLUE, space_before=900),
+                labelled("Face", "ViT-Base/16, fine-tuned on four merged "
+                                 "face corpora", BLUE),
+                labelled("Voice", "WavLM-base+, 23k clips, speaker-disjoint "
+                                  "splits", BLUE),
+                labelled("Text", "TinyBERT, fine-tuned on GoEmotions", BLUE),
+                labelled("Metrics", "scikit-learn; librosa + soundfile "
+                                    "condition audio", BLUE),
+                labelled("Hardware", "one RTX 4060. No cluster, no cloud.",
+                         BLUE),
+            ],
+        },
+        {
+            "accent": AMBER,
+            "heading": "Serve",
+            "lines": [
+                labelled("API", "FastAPI + Uvicorn", AMBER, space_before=900),
+                labelled("Transport", "ONE WebSocket carries frames, 16 kHz "
+                                      "PCM and text", AMBER),
+                labelled("Face", "ONNX Runtime, CUDA provider, CPU fallback",
+                         AMBER),
+                labelled("Voice / Text", "PyTorch; the 380 MB voice model "
+                                         "loads only if asked", AMBER),
+                labelled("Detection", "OpenCV YuNet + five-point eye-line "
+                                      "alignment", AMBER),
+                labelled("Fusion", "~40 lines of NumPy; constants live in "
+                                   "reliability.json", AMBER),
+            ],
+        },
+        {
+            "accent": PURPLE,
+            "heading": "Show",
+            "lines": [
+                labelled("Client", "one HTML file. No React, no build step.",
+                         PURPLE, space_before=900),
+                labelled("Video", "getUserMedia to canvas to Base64 JPEG",
+                         PURPLE),
+                labelled("Audio", "AudioWorklet, mono 16 kHz windows", PURPLE),
+                labelled("Pacing", "next frame only when the server "
+                                   "acknowledges the last", PURPLE),
+                labelled("Output", "label, three opinions, three weights, "
+                                   "conflict flag", PURPLE),
+                labelled("Cost", "32 FPS face, ~16 ms a voice window, "
+                                 "~3 ms a message", PURPLE),
+            ],
+        },
+    ])
 
-    slide.text(
-        CONTENT_LEFT,
-        bottom + 0.25,
-        CONTENT_WIDTH,
-        [
-            {"text": "Why it is this boring", "size": 20, "bold": True,
-             "color": BODY_INK},
-            {"text": "A telemedicine deployment cannot assume a datacentre. "
-                     "Every component here degrades to CPU on one machine, "
-                     "and the heaviest piece - the 380 MB WavLM checkpoint - "
-                     "is opt-in, so a session that never uses the microphone "
-                     "never pays for it.",
-             "size": 16, "space_before": 600},
-        ],
-        name="Footer",
+    footer(
+        slide, bottom + 0.30,
+        "Why it is deliberately boring",
+        "A telemedicine deployment cannot assume a datacentre. Every piece "
+        "here degrades to CPU on one machine, and the heaviest piece is "
+        "opt-in - a session that never uses the microphone never loads it.",
     )
 
     slide.check("Technology Stack")
-    return slide.render(), "Technology Stack"
+    return slide.render()
 
 
-def build_why_models(scaffold: str) -> tuple[str, str]:
+def build_encoders(scaffold: str) -> str:
     slide = SlideBuilder(
         scaffold,
-        "Why These Models",
-        "Each encoder was chosen against a measured alternative on the same "
-        "data, not off a leaderboard.",
+        "Meet the Three Encoders",
+        "What each model actually is, and the one property that makes it "
+        "right for its signal.",
     )
 
-    bottom = slide.cards(
-        3.15,
-        4.30,
-        [
-            (
-                BLUE,
-                "ViT-Base/16",
-                "Angry and sad differ in how the brow and the mouth move "
-                "together, and self-attention over 16x16 patches relates "
-                "those two regions in one layer where a small-kernel CNN "
-                "needs depth to reach across the face. Capacity is not the "
-                "binding constraint: balanced sampling (v5), label cleaning "
-                "(v6) and a two-checkpoint ensemble all measured WORSE than "
-                "v4 on unseen faces. ImageNet-21k pretraining is doing more "
-                "work than any further architecture change would.",
-            ),
-            (
-                AMBER,
-                "WavLM-base+",
-                "Benchmarked against this project's own MFCC CNN on "
-                "identical speaker-disjoint splits: macro-F1 0.322 to 0.499, "
-                "a 17.7-point gap from the model alone. Self-supervised "
-                "pretraining on roughly 94k hours of speech is knowledge "
-                "4,179 clips cannot supply. A learned mixture over its 13 "
-                "hidden states settles on layers 9-10, not the top - the "
-                "masked-prediction head drifts away from paralinguistics, so "
-                "the final layer alone would discard the emotion.",
-            ),
-            (
-                PURPLE,
-                "TinyBERT 4L-312D",
-                "Benchmarked against DistilBERT (67M) and MobileBERT (24.6M) "
-                "on the same split: 88.6 macro-F1 against 89.3 and 89.4, so "
-                "0.8 points behind at 2.8 ms against 10.6 and 16.9, and 7.6x "
-                "smaller than BERT-base. BERT-base and RoBERTa were excluded "
-                "on the CPU budget, not on accuracy. The deployed checkpoint "
-                "is the GoEmotions one because it predicts the shared seven "
-                "directly; the 6-class head cannot say neutral or disgust.",
-            ),
-        ],
+    bottom = slide.cards(3.15, [
+        {
+            "accent": BLUE,
+            "heading": "ViT-Base/16  ·  the face",
+            "lines": [
+                labelled("What it is", "A transformer that cuts the face into "
+                                       "16x16 patches and lets every patch "
+                                       "look at every other patch at once.",
+                         BLUE, space_before=900),
+                labelled("Why that fits", "Angry and sad differ in how the "
+                                          "brow and the mouth move TOGETHER. "
+                                          "Attention links two distant "
+                                          "regions in one step; a small-kernel "
+                                          "CNN needs depth to reach across "
+                                          "the face.", BLUE),
+                labelled("In our system", "86M parameters, fine-tuned on four "
+                                          "face datasets, exported to ONNX. "
+                                          "6.6 ms a frame.", BLUE),
+            ],
+        },
+        {
+            "accent": AMBER,
+            "heading": "WavLM-base+  ·  the voice",
+            "lines": [
+                labelled("What it is", "A speech model pre-trained by "
+                                       "listening to ~94,000 hours of "
+                                       "unlabelled speech and learning to "
+                                       "fill in masked-out audio. It saw no "
+                                       "emotion labels at that stage.",
+                         AMBER, space_before=900),
+                labelled("Why that fits", "That pre-training teaches it what "
+                                          "voices DO - pitch, timing, strain. "
+                                          "Our 4,179 labelled clips could "
+                                          "never teach that from scratch.",
+                         AMBER),
+                labelled("In our system", "95M parameters. Scores a 4-second "
+                                          "window about once a second, in "
+                                          "16 ms.", AMBER),
+            ],
+        },
+        {
+            "accent": PURPLE,
+            "heading": "TinyBERT 4L  ·  the words",
+            "lines": [
+                labelled("What it is", "A BERT shrunk by distillation: a full "
+                                       "size model teaches a four-layer "
+                                       "student to copy its answers. 14.4M "
+                                       "parameters, about an eighth of "
+                                       "BERT-base.", PURPLE,
+                         space_before=900),
+                labelled("Why that fits", "Text is the lightest signal and "
+                                          "must not take the budget. At 2.8 ms "
+                                          "a message it runs on CPU beside "
+                                          "two other models.", PURPLE),
+                labelled("In our system", "The GoEmotions checkpoint, because "
+                                          "it predicts our seven classes "
+                                          "directly.", PURPLE),
+            ],
+        },
+    ])
+
+    footer(
+        slide, bottom + 0.30,
+        "The one rule they all obey",
+        "Each outputs a probability over the SAME seven emotions in the same "
+        "order, so fusing them is arithmetic rather than translation. That "
+        "constraint - not accuracy - is what ruled several otherwise better "
+        "models out.",
     )
 
-    slide.text(
-        CONTENT_LEFT,
-        bottom + 0.25,
-        CONTENT_WIDTH,
-        [
-            {"text": "And why the fusion is not a fourth model",
-             "size": 20, "bold": True, "color": BODY_INK},
-            {"text": "A learned fusion head needs trimodal training data in "
-                     "this label space, and none exists - it would have to be "
-                     "fitted on simulated pairs and could never be audited. "
-                     "The logarithmic opinion pool has no parameters to fit, "
-                     "survives a missing modality, and reports the weight it "
-                     "gave each signal, which is what a clinician actually "
-                     "has to check.",
-             "size": 16, "space_before": 600},
-        ],
-        name="Footer",
+    slide.check("Meet the Three Encoders")
+    return slide.render()
+
+
+def build_alternatives(scaffold: str) -> str:
+    slide = SlideBuilder(
+        scaffold,
+        "Why These, Not the Alternatives",
+        "Each choice was measured against a named competitor on the same "
+        "data. Nothing here came off a leaderboard.",
     )
 
-    slide.check("Why These Models")
-    return slide.render(), "Why These Models"
+    columns = [
+        (1.25, 2.30),    # what
+        (3.75, 3.30),    # chosen
+        (7.35, 5.10),    # measured against
+        (12.75, 6.00),   # result
+    ]
+
+    header = [
+        (columns[0][0], columns[0][1],
+         {"text": "WHAT", "size": 14, "bold": True, "color": TITLE_BLUE}),
+        (columns[1][0], columns[1][1],
+         {"text": "WE CHOSE", "size": 14, "bold": True, "color": TITLE_BLUE}),
+        (columns[2][0], columns[2][1],
+         {"text": "MEASURED AGAINST", "size": 14, "bold": True,
+          "color": TITLE_BLUE}),
+        (columns[3][0], columns[3][1],
+         {"text": "WHAT THE MEASUREMENT SAID", "size": 14, "bold": True,
+          "color": TITLE_BLUE}),
+    ]
+
+    rows = [
+        ("Face", "ViT-Base/16 (v4)",
+         "Our own v5 (balanced sampling), v6 (label cleaning) and a "
+         "v3+v4 ensemble",
+         "All three scored WORSE on unseen faces. v6 gained 3.6 points of "
+         "validation accuracy and lost 4.3 on unseen faces - so the "
+         "constraint is data diversity, not the model."),
+        ("Voice", "WavLM-base+",
+         "This project's own MFCC-CNN, retrained unchanged on identical "
+         "speaker-disjoint splits",
+         "Macro-F1 0.322 to 0.499. A 17.7-point gap with the data held "
+         "constant, so it is attributable to the model."),
+        ("Text", "TinyBERT 4L-312D",
+         "DistilBERT (67M) and MobileBERT (24.6M), same split",
+         "88.6 macro-F1 against 89.3 and 89.4. We give up 0.8 points and get "
+         "2.8 ms instead of 10.6 and 16.9."),
+        ("Text head", "GoEmotions checkpoint",
+         "The higher-scoring 6-class MTEB checkpoint",
+         "MTEB cannot express 'neutral' or 'disgust'. Neutral is the most "
+         "common state in a consultation, so the better score was unusable."),
+        ("Fusion", "Logarithmic opinion pool",
+         "A learned fusion head",
+         "No trimodal corpus exists in this label space. A learned head "
+         "would be fitted on simulated pairs and could not be audited."),
+    ]
+
+    y = 2.70
+    y = slide.row(y, header) + 0.12
+
+    for what, chosen, against, result in rows:
+        y = slide.row(y + 0.14, [
+            (columns[0][0], columns[0][1],
+             {"text": what, "size": 16, "bold": True, "color": BODY_INK}),
+            (columns[1][0], columns[1][1],
+             {"text": chosen, "size": 15, "bold": True, "color": BRAND_RED}),
+            (columns[2][0], columns[2][1],
+             {"text": against, "size": 15}),
+            (columns[3][0], columns[3][1],
+             {"text": result, "size": 15}),
+        ])
+
+    footer(
+        slide, y + 0.28,
+        "How this relates to slides 6 and 7",
+        "Those slides proposed Combination A - MentalBERT, WavLM and DINOv2 - "
+        "from a literature comparison. One finding survived into the built "
+        "system: WavLM. MentalBERT and DINOv2 are not in the codebase; "
+        "neither predicts our seven classes directly, and both exceed the CPU "
+        "budget. Treat the F1 figures on slide 7 as that earlier study's, "
+        "not this system's.",
+        color=BRAND_RED,
+    )
+
+    slide.check("Why These, Not the Alternatives")
+    return slide.render()
 
 
-def build_stability(scaffold: str) -> tuple[str, str]:
+def build_stability(scaffold: str) -> str:
     slide = SlideBuilder(
         scaffold,
         "The Honest Problem: The Label Will Not Sit Still",
         "Hold a steady expression and the displayed emotion still changes "
-        "several times a second. Three measured causes - none of them the "
-        "viewer's imagination.",
+        "several times a second. Three measured causes.",
     )
 
-    bottom = slide.cards(
-        3.15,
-        4.30,
-        [
-            (
-                BRAND_RED,
-                "The top-1 is nearly a tie",
-                "52.3% accuracy over seven classes on unseen faces means the "
-                "leading and the runner-up class are usually within a few "
-                "points of each other. Any change in the crop, the lighting "
-                "or the head pose re-orders them, so the argmax moves while "
-                "the face does not. neutral against sad, and angry against "
-                "disgust, are the pairs that swap most - disgust holds only "
-                "0.20 F1 cross-dataset.",
-            ),
-            (
-                BRAND_RED,
-                "The session prior is wrong",
-                "A webcam consultation is roughly 55% neutral, but the model "
-                "is calibrated on a balanced set. Measured under a realistic "
-                "prior it emits neutral on 27.5% of frames, sad at 2.2x and "
-                "surprise at 2.1x their true rate - so most spurious "
-                "'surprise' flashes are a neutral face leaking. Correcting "
-                "the prior lifts accuracy from 56.7% to 72.3%, and the "
-                "correction ships switched off.",
-            ),
-            (
-                BRAND_RED,
-                "Only the face leg is smoothed",
-                "The EMA (0.6 s time constant) and the 0.05 hysteresis "
-                "margin sit inside the face pipeline. The fusion engine is "
-                "stateless by design, so the number on screen has no "
-                "temporal filter at all - and its weights move every frame "
-                "as audio decays with an 8 s half-life and text with a 30 s "
-                "one. The reading can change with no new evidence.",
-            ),
-        ],
-    )
+    bottom = slide.cards(3.15, [
+        {
+            "accent": BRAND_RED,
+            "heading": "The top-1 is nearly a tie",
+            "lines": [
+                labelled("The number", "52.3% over seven classes on unseen "
+                                       "faces.", BRAND_RED, space_before=900),
+                labelled("What it means", "The leading class and the "
+                                          "runner-up usually sit within a few "
+                                          "points. Any change in crop, light "
+                                          "or pose re-orders them - so the "
+                                          "answer moves while the face does "
+                                          "not.", BRAND_RED),
+                labelled("Worst pairs", "neutral against sad, angry against "
+                                        "disgust. Disgust holds only 0.20 F1 "
+                                        "cross-dataset.", BRAND_RED),
+            ],
+        },
+        {
+            "accent": BRAND_RED,
+            "heading": "The session prior is wrong",
+            "lines": [
+                labelled("The number", "Neutral is shown on 27.5% of frames; "
+                                       "a real session is ~55% neutral.",
+                         BRAND_RED, space_before=900),
+                labelled("What it means", "The model is calibrated on a "
+                                          "balanced set and carries that "
+                                          "prior. Sad fires at 2.2x and "
+                                          "surprise at 2.1x their true rate - "
+                                          "most spurious 'surprise' flashes "
+                                          "are a neutral face leaking.",
+                         BRAND_RED),
+                labelled("The fix exists", "Correcting the prior lifts "
+                                           "accuracy 56.7% to 72.3%. It ships "
+                                           "switched off.", BRAND_RED),
+            ],
+        },
+        {
+            "accent": BRAND_RED,
+            "heading": "Only the face leg is smoothed",
+            "lines": [
+                labelled("The number", "EMA time constant 0.6 s, hysteresis "
+                                       "margin 0.05 - inside the face "
+                                       "pipeline only.", BRAND_RED,
+                         space_before=900),
+                labelled("What it means", "The fusion engine is stateless by "
+                                          "design, so the number the clinician "
+                                          "reads has no temporal filter at "
+                                          "all.", BRAND_RED),
+                labelled("And worse", "Its weights move every frame as audio "
+                                      "decays (8 s half-life) and text decays "
+                                      "(30 s). The reading can change with no "
+                                      "new evidence.", BRAND_RED),
+            ],
+        },
+    ])
 
-    slide.text(
-        CONTENT_LEFT,
-        bottom + 0.25,
-        CONTENT_WIDTH,
-        [
-            {"text": "And nothing in this deck measures it",
-             "size": 20, "bold": True, "color": BRAND_RED},
-            {"text": "Every figure presented so far is per-frame accuracy on "
-                     "still images. Not one metric describes how often the "
-                     "displayed label changes, which is the thing a clinician "
-                     "would notice first. That gap is the first item in the "
-                     "future scope, because nothing here can be fixed while "
-                     "nothing measures it.",
-             "size": 16, "space_before": 600},
-        ],
-        name="Footer",
+    footer(
+        slide, bottom + 0.30,
+        "And nothing in this deck measures it",
+        "Every figure we have shown is per-frame accuracy on still images. "
+        "Not one metric describes how often the displayed label changes - "
+        "which is the first thing a clinician would notice. That gap is item "
+        "one in the future scope.",
+        color=BRAND_RED,
     )
 
     slide.check("Stability")
-    return slide.render(), "Stability"
+    return slide.render()
 
 
 def build_future_scope(scaffold: str) -> str:
@@ -546,100 +674,98 @@ def build_future_scope(scaffold: str) -> str:
     slide.text(
         CONTENT_LEFT, 2.12, CONTENT_WIDTH,
         [{"text": "NEXT  —  make the live output trustworthy",
-          "size": 17, "bold": True, "color": BODY_INK}],
+          "size": 17, "bold": True, "color": TITLE_BLUE}],
         name="RowLabel",
     )
 
-    row_one = slide.cards(
-        2.90,
-        2.95,
-        [
-            (
-                BLUE,
-                "1 · Measure stability",
-                "Report switches per minute, mean dwell time per label and "
-                "the entropy of the displayed sequence over held-out video, "
-                "beside accuracy. A model that is 52% accurate and steady is "
-                "clinically usable; one that is 52% accurate and flickering "
-                "is not, and today's metrics cannot tell them apart.",
-            ),
-            (
-                AMBER,
-                "2 · Smooth the decision",
-                "Move the EMA and hysteresis after the pool rather than "
-                "inside the face leg, then replace both with an explicit "
-                "dwell-time model - a seven-state HMM decoded with Viterbi - "
-                "so changing the reported emotion has to be paid for. Enable "
-                "the prior correction and report it as a serving rule.",
-            ),
-            (
-                PURPLE,
-                "3 · Report episodes, not frames",
-                "A clinician does not need 32 labels a second. Aggregate to "
-                "intervals - '2 min 40 s predominantly sad, two flagged "
-                "conflicts' - and expose per-frame output only on request. "
-                "This also lets the system abstain on a low-quality or "
-                "conflicted stretch instead of guessing.",
-            ),
-        ],
-        heading_size=21,
-        body_size=15,
-    )
+    row_one = slide.cards(2.90, [
+        {
+            "accent": BLUE,
+            "heading": "1 · Measure stability",
+            "lines": [
+                labelled("Do", "Report switches per minute, mean dwell time "
+                               "and sequence entropy beside accuracy.", BLUE,
+                         space_before=800),
+                labelled("Why", "52% accurate and steady is usable; 52% and "
+                                "flickering is not. Today's metrics cannot "
+                                "tell them apart.", BLUE),
+            ],
+        },
+        {
+            "accent": AMBER,
+            "heading": "2 · Smooth the decision",
+            "lines": [
+                labelled("Do", "Move the EMA and hysteresis after the pool, "
+                               "then replace both with a seven-state HMM "
+                               "decoded by Viterbi.", AMBER, space_before=800),
+                labelled("Why", "Changing the reported emotion should have to "
+                                "be paid for by evidence. Also: turn the "
+                                "prior correction on.", AMBER),
+            ],
+        },
+        {
+            "accent": PURPLE,
+            "heading": "3 · Report episodes",
+            "lines": [
+                labelled("Do", "Aggregate to intervals - '2 min 40 s "
+                               "predominantly sad, two conflicts' - with "
+                               "per-frame output on request.", PURPLE,
+                         space_before=800),
+                labelled("Why", "A clinician does not need 32 labels a "
+                                "second, and this gives the system somewhere "
+                                "to say 'unknown'.", PURPLE),
+            ],
+        },
+    ], heading_size=21)
 
     slide.text(
         CONTENT_LEFT, row_one + 0.22, CONTENT_WIDTH,
         [{"text": "THEN  —  what a clinical claim would require",
-          "size": 17, "bold": True, "color": BODY_INK}],
+          "size": 17, "bold": True, "color": TITLE_BLUE}],
         name="RowLabel",
     )
 
-    row_two = slide.cards(
-        row_one + 1.00,
-        2.95,
-        [
-            (
-                BLUE,
-                "4 · Escape the data ceiling",
-                "v5, v6 and the ensemble all failed, which says the binding "
-                "constraint is face diversity, not capacity. The levers left "
-                "are the full AffectNet (~287k against the 27,823 public "
-                "subset) and a trimodal corpus such as IEMOCAP or CMU-MOSEI, "
-                "so fusion can be fitted and tested on real pairs rather "
-                "than simulated ones.",
-            ),
-            (
-                AMBER,
-                "5 · Validate clinically",
-                "Every number here comes from acted corpora or TV dialogue. "
-                "'Emotionally intelligent telemedicine' needs agreement "
-                "against clinician ratings on real consultations, under "
-                "ethics approval, with accuracy reported per skin tone, age "
-                "and gender - the fairness risk a face model carries by "
-                "default.",
-            ),
-            (
-                PURPLE,
-                "6 · Privacy by construction",
-                "Frames currently cross the wire as Base64 JPEG. Moving the "
-                "face leg into the browser with ONNX Runtime Web keeps pixels "
-                "on the device and sends only a probability vector. "
-                "Federated fine-tuning is then the route to clinical data "
-                "that cannot legally be centralised.",
-            ),
-        ],
-        heading_size=21,
-        body_size=15,
-    )
+    slide.cards(row_one + 1.00, [
+        {
+            "accent": BLUE,
+            "heading": "4 · Escape the data ceiling",
+            "lines": [
+                labelled("Do", "Full AffectNet (~287k against our 27,823) and "
+                               "a real trimodal corpus - IEMOCAP or "
+                               "CMU-MOSEI.", BLUE, space_before=800),
+                labelled("Why", "Three attempts to beat v4 all failed, which "
+                                "says the constraint is face diversity, not "
+                                "capacity.", BLUE),
+            ],
+        },
+        {
+            "accent": AMBER,
+            "heading": "5 · Validate clinically",
+            "lines": [
+                labelled("Do", "Agreement against clinician ratings on real "
+                               "consultations, under ethics approval.", AMBER,
+                         space_before=800),
+                labelled("Why", "Every number here is acted corpora or TV "
+                                "dialogue. Report accuracy per skin tone, age "
+                                "and gender.", AMBER),
+            ],
+        },
+        {
+            "accent": PURPLE,
+            "heading": "6 · Privacy by construction",
+            "lines": [
+                labelled("Do", "Run the face leg in the browser with ONNX "
+                               "Runtime Web; send only the seven "
+                               "probabilities.", PURPLE, space_before=800),
+                labelled("Why", "Frames currently cross the wire as Base64 "
+                                "JPEG. Federated training then reaches data "
+                                "that cannot be centralised.", PURPLE),
+            ],
+        },
+    ], heading_size=21)
 
     slide.check("Future Scope")
     return slide.render()
-
-
-# ============================================================
-# SPEAKER NOTES
-# ============================================================
-
-NOTES = {}   # filled from notes.py, keyed by final slide number
 
 
 # ============================================================
@@ -647,16 +773,23 @@ NOTES = {}   # filled from notes.py, keyed by final slide number
 # ============================================================
 
 CONTENT_TYPE = (
-    "application/vnd.openxmlformats-officedocument."
-    "presentationml.slide+xml"
+    "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"
 )
+
+# Each new slide, and the ORIGINAL slide number it is shown after.
+INSERT_AFTER = [
+    (10, build_tech_stack),
+    (11, build_encoders),
+    (11, build_alternatives),
+    (18, build_stability),
+]
 
 
 def make_scaffold(slide19_xml: str) -> str:
     """Strip Future Scope down to its decoration, leaving a BODY marker.
 
-    The four freeform groups are the Canva template's furniture: the red
-    bar along the bottom, the two logo images, the corner mark. They are
+    The four freeform groups are the Canva template's furniture - the red
+    bar along the bottom, two logo images, the corner mark. They are
     identical on every content slide, so they become the scaffold.
     """
 
@@ -670,7 +803,7 @@ def make_scaffold(slide19_xml: str) -> str:
         ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/'
         'relationships"'
         ' xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">'
-        "<p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/>"
+        '<p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/>'
         "<p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm>"
         '<a:off x="0" y="0"/><a:ext cx="0" cy="0"/>'
         '<a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>'
@@ -691,17 +824,10 @@ def main() -> None:
     slide19_rels = parts["ppt/slides/_rels/slide19.xml.rels"]
 
     print("Building new slides:")
-
-    new_slides = {
-        # (template-slide to insert AFTER, built xml)
-        "tech": (10, build_tech_stack(scaffold)[0]),
-        "models": (11, build_why_models(scaffold)[0]),
-        "stability": (18, build_stability(scaffold)[0]),
-    }
+    built = [(after, builder(scaffold)) for after, builder in INSERT_AFTER]
 
     parts["ppt/slides/slide19.xml"] = build_future_scope(scaffold).encode("utf-8")
 
-    # --- add the three new slide parts ---------------------------------
     numbers = [
         int(m.group(1))
         for name in parts
@@ -709,42 +835,39 @@ def main() -> None:
     ]
     next_number = max(numbers) + 1
 
-    added = {}
-    for key, (after, xml) in new_slides.items():
-        name = f"ppt/slides/slide{next_number}.xml"
-        parts[name] = xml.encode("utf-8")
+    added = []
+    for after, xml in built:
+        parts[f"ppt/slides/slide{next_number}.xml"] = xml.encode("utf-8")
         parts[f"ppt/slides/_rels/slide{next_number}.xml.rels"] = slide19_rels
-        added[key] = (after, next_number)
+        added.append((after, next_number))
         next_number += 1
 
     # --- content types -------------------------------------------------
     types = parts["[Content_Types].xml"].decode("utf-8")
-    additions = "".join(
+    types = types.replace("</Types>", "".join(
         f'<Override PartName="/ppt/slides/slide{number}.xml" '
-        f'ContentType="{CONTENT_TYPE}"/>'
-        for _, number in added.values()
-    )
-    types = types.replace("</Types>", additions + "</Types>")
+        f'ContentType="{CONTENT_TYPE}"/>' for _, number in added
+    ) + "</Types>")
     parts["[Content_Types].xml"] = types.encode("utf-8")
 
     # --- presentation rels --------------------------------------------
     rels = parts["ppt/_rels/presentation.xml.rels"].decode("utf-8")
-    existing = [int(m) for m in re.findall(r'Id="rId(\d+)"', rels)]
-    next_rid = max(existing) + 1
+    next_rid = max(int(m) for m in re.findall(r'Id="rId(\d+)"', rels)) + 1
 
     rid_for = {}
     new_rels = ""
-    for key, (_, number) in added.items():
-        rid_for[key] = f"rId{next_rid}"
+    for after, number in added:
+        rid_for[number] = f"rId{next_rid}"
         new_rels += (
             f'<Relationship Id="rId{next_rid}" Type="http://schemas.'
-            "openxmlformats.org/officeDocument/2006/relationships/slide\" "
+            'openxmlformats.org/officeDocument/2006/relationships/slide" '
             f'Target="slides/slide{number}.xml"/>'
         )
         next_rid += 1
 
-    rels = rels.replace("</Relationships>", new_rels + "</Relationships>")
-    parts["ppt/_rels/presentation.xml.rels"] = rels.encode("utf-8")
+    parts["ppt/_rels/presentation.xml.rels"] = rels.replace(
+        "</Relationships>", new_rels + "</Relationships>"
+    ).encode("utf-8")
 
     # --- slide order ---------------------------------------------------
     presentation = parts["ppt/presentation.xml"].decode("utf-8")
@@ -754,15 +877,15 @@ def main() -> None:
     if len(entries) != 21:
         raise SystemExit(f"expected 21 slides, found {len(entries)}")
 
-    used_ids = [int(m) for m in re.findall(r'id="(\d+)"', id_list.group(0))]
-    next_sld_id = max(max(used_ids), 255) + 1
+    next_sld_id = max(
+        max(int(m) for m in re.findall(r'id="(\d+)"', id_list.group(0))), 255
+    ) + 1
 
-    inserts = {}
-    for key, (after, _) in added.items():
-        entry = (
-            f'<p:sldId id="{next_sld_id}" r:id="{rid_for[key]}"/>'
+    inserts: dict[int, list[str]] = {}
+    for after, number in added:
+        inserts.setdefault(after, []).append(
+            f'<p:sldId id="{next_sld_id}" r:id="{rid_for[number]}"/>'
         )
-        inserts.setdefault(after, []).append(entry)
         next_sld_id += 1
 
     ordered = []
@@ -771,8 +894,7 @@ def main() -> None:
         ordered.extend(inserts.get(position, []))
 
     parts["ppt/presentation.xml"] = presentation.replace(
-        id_list.group(0),
-        f"<p:sldIdLst>{''.join(ordered)}</p:sldIdLst>",
+        id_list.group(0), f"<p:sldIdLst>{''.join(ordered)}</p:sldIdLst>"
     ).encode("utf-8")
 
     # --- write ---------------------------------------------------------
@@ -784,8 +906,6 @@ def main() -> None:
             archive.writestr(name, payload)
 
     print(f"\nWrote {target} with {len(ordered)} slides")
-    for key, (after, number) in added.items():
-        print(f"  {key}: slide{number}.xml, shown after original slide {after}")
 
 
 if __name__ == "__main__":
