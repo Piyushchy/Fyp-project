@@ -96,3 +96,4 @@ class VisionEncoder(nn.Module):
         """
         cls_token = self.extract_cls(pixel_values)
         return self.projection(cls_token)
+

@@ -136,3 +136,4 @@ class MultimodalTransformerFusion(nn.Module):
         mod_ids = torch.tensor(ids, dtype=torch.long, device=device).unsqueeze(0).expand(seq.size(0), -1)
 
         return self.forward(seq, mod_ids)
+

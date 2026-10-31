@@ -22,3 +22,4 @@ class TextEncoder(nn.Module):
             Tensor of shape (batch_size, 256) or (256,)
         """
         return self.embedding(x)
+
