@@ -47,14 +47,21 @@ from fastapi.responses import FileResponse
 # ---------------------------------------------------------------------------
 # Add project root & text-emotion-module to path so imports work regardless
 # of how uvicorn is launched.
-_PROJECT_ROOT = Path(__file__).resolve().parent
+_BACKEND_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _BACKEND_DIR.parent
+_FRONTEND_DIR = _PROJECT_ROOT / "frontend"
 sys.path.insert(0, str(_PROJECT_ROOT))
 sys.path.insert(0, str(_PROJECT_ROOT / "text-emotion-module"))
 
-from audio_cnn import AudioCNN                       # noqa: E402
-from main import (                                    # noqa: E402
+from models.audio_cnn import AudioCNN                       # noqa: E402
+from models.vision_encoder import VisionEncoder             # noqa: E402
+from models.text_encoder import TextEncoder                 # noqa: E402
+from models.fusion import (                                 # noqa: E402
     MultimodalTransformerFusion,
-    TextEncoder,
+    MODALITY_VISION,
+    MODALITY_AUDIO,
+    MODALITY_TEXT,
+    TARGET_EMOTIONS,
 )
 
 # Text module
@@ -107,6 +114,9 @@ _audio_cnn: AudioCNN | None = None
 _text_tokenizer = None
 _text_model = None
 
+# --- Vision (ViT 768->256 Encoder) ---
+_vision_encoder: VisionEncoder | None = None
+
 # --- Fusion ---
 _fusion_module: MultimodalTransformerFusion | None = None
 _text_encoder: TextEncoder | None = None
@@ -114,8 +124,8 @@ _text_encoder: TextEncoder | None = None
 # PyTorch device
 _device: torch.device = torch.device("cpu")
 
-# Fusion emotion classes (5-class from main.py)
-FUSION_ID2LABEL = {0: "happy", 1: "sad", 2: "angry", 3: "fear", 4: "surprise"}
+# Fusion emotion classes (5-class target emotion space)
+FUSION_ID2LABEL = {i: name for i, name in enumerate(TARGET_EMOTIONS)}
 
 # ViT-only emotion classes (7-class)
 VIT_EMOTION_CLASSES = {}  # populated from emotion_config.json
@@ -132,7 +142,7 @@ async def lifespan(_app: FastAPI):
     global _mp_face_detection
     global _audio_cnn
     global _text_tokenizer, _text_model
-    global _fusion_module, _text_encoder
+    global _fusion_module, _text_encoder, _vision_encoder
     global _device, VIT_EMOTION_CLASSES
 
     _device = torch.device(
@@ -192,6 +202,11 @@ async def lifespan(_app: FastAPI):
     _text_encoder.eval()
     logger.info("TextEncoder projection layer initialised")
 
+    # ---- VisionEncoder (ViT [CLS] 768→256 projection) ----
+    _vision_encoder = VisionEncoder(embed_dim=256).to(_device)
+    _vision_encoder.eval()
+    logger.info("VisionEncoder (ViT 768→256) initialised")
+
     # ---- Fusion module ----
     _fusion_module = MultimodalTransformerFusion(
         embed_dim=256, num_classes=5
@@ -212,6 +227,7 @@ async def lifespan(_app: FastAPI):
     if _mp_face_detection is not None:
         _mp_face_detection.close()
     _onnx_session = None
+    _vision_encoder = None
     logger.info("Resources released")
 
 
@@ -228,7 +244,10 @@ app = FastAPI(
 
 @app.get("/")
 async def serve_index():
-    return FileResponse(str(_PROJECT_ROOT / "index.html"), media_type="text/html")
+    index_file = _FRONTEND_DIR / "index.html"
+    if not index_file.exists():
+        index_file = _PROJECT_ROOT / "index.html"
+    return FileResponse(str(index_file), media_type="text/html")
 
 
 # ============================================================
@@ -286,27 +305,30 @@ def run_vit_inference(face_crop: np.ndarray) -> tuple[dict[str, Any], np.ndarray
     }, logits
 
 
-def vit_logits_to_256(logits: np.ndarray) -> torch.Tensor:
-    """Project the ViT's 7-dim logit vector into a 256-dim feature via a
-    learnable linear layer stored as a module attribute on this function.
+def extract_vision_feature(face_crop: np.ndarray) -> torch.Tensor:
+    """Extract 256-D feature representation from face crop using VisionEncoder (ViT [CLS] 768->256)."""
+    assert _vision_encoder is not None
+    tensor_np = preprocess_face(face_crop)
+    tensor_torch = torch.from_numpy(tensor_np).to(_device)
+    with torch.no_grad():
+        return _vision_encoder(tensor_torch)
 
-    On first call the layer is lazily created and moved to _device.
+
+def vit_logits_to_256(logits: np.ndarray) -> torch.Tensor:
+    """[DEPRECATED] Project 7-dim logits to 256-dim feature.
+    Kept for backwards-compatibility; superseded by extract_vision_feature.
     """
     if not hasattr(vit_logits_to_256, "_proj"):
         proj = nn.Linear(len(_id2label), 256).to(_device)
         proj.eval()
-        # Try loading saved projection weights
         proj_ckpt = _PROJECT_ROOT / "vit_proj_256.pth"
         if proj_ckpt.exists():
             proj.load_state_dict(torch.load(str(proj_ckpt), map_location=_device))
-            logger.info("ViT→256 projection loaded from %s", proj_ckpt)
-        else:
-            logger.warning("No vit_proj_256.pth — using random projection")
         vit_logits_to_256._proj = proj
 
     with torch.no_grad():
         t = torch.tensor(logits, dtype=torch.float32).unsqueeze(0).to(_device)
-        return vit_logits_to_256._proj(t)  # (1, 256)
+        return vit_logits_to_256._proj(t)
 
 
 # ============================================================
@@ -446,41 +468,35 @@ def fuse_predictions(
     audio_256: torch.Tensor | None,
     text_256: torch.Tensor | None,
 ) -> dict[str, Any] | None:
-    """Run the TransformerFusion over available modalities.
+    """Run the MultimodalTransformerFusion over available modalities.
 
-    The fusion module expects (audio, text) as two sequence tokens.
-    We extend it to handle 1–3 tokens by stacking whatever is available
-    and mean-pooling inside the transformer.
+    Modality embeddings (0=vision, 1=audio, 2=text) are injected before
+    self-attention so the Transformer can distinguish modality sources.
 
-    Returns dict with label + confidence, or None if < 1 modality present.
+    Returns dict with label + confidence, or None if no modality is present.
     """
     assert _fusion_module is not None
 
-    vectors = []
     modality_names = []
     if vision_256 is not None:
-        vectors.append(vision_256)
         modality_names.append("vision")
     if audio_256 is not None:
-        vectors.append(audio_256)
         modality_names.append("audio")
     if text_256 is not None:
-        vectors.append(text_256)
         modality_names.append("text")
 
-    if len(vectors) == 0:
+    if not modality_names:
         return None
 
     with torch.no_grad():
-        # Stack → (1, N, 256)
-        seq = torch.cat([v.unsqueeze(1) if v.dim() == 2 else v.unsqueeze(0).unsqueeze(0) for v in vectors], dim=1)
+        logits = _fusion_module.forward_modalities(
+            vision_feat=vision_256,
+            audio_feat=audio_256,
+            text_feat=text_256,
+        )
+        if logits is None:
+            return None
 
-        # Transformer self-attention across modality tokens
-        transformer_out = _fusion_module.transformer(seq)  # (1, N, 256)
-        pooled = torch.mean(transformer_out, dim=1)        # (1, 256)
-
-        # Classifier — BatchNorm1d needs eval mode (which we set at startup)
-        logits = _fusion_module.classifier(pooled)          # (1, 5)
         probs = F.softmax(logits, dim=-1)[0]
         idx = int(probs.argmax())
 
@@ -535,8 +551,10 @@ def process_multimodal(
                     x, y, w, h = bbox["x"], bbox["y"], bbox["w"], bbox["h"]
                     face_crop = frame_bgr[y : y + h, x : x + w]
                     if face_crop.size > 0:
-                        vit_pred, vit_logits = run_vit_inference(face_crop)
-                        vision_256 = vit_logits_to_256(vit_logits)
+                        vit_pred = None
+                        if _onnx_session is not None:
+                            vit_pred, _ = run_vit_inference(face_crop)
+                        vision_256 = extract_vision_feature(face_crop)
 
                         payload["face_detected"] = True
                         payload["bbox"] = bbox
@@ -688,8 +706,10 @@ async def health() -> dict[str, str]:
 if __name__ == "__main__":
     import uvicorn
 
+    # Support running either from root (uvicorn backend.app:app) or within backend directory (uvicorn app:app)
+    app_target = "backend.app:app" if Path.cwd() == _PROJECT_ROOT else "app:app"
     uvicorn.run(
-        "server:app",
+        app_target,
         host="0.0.0.0",
         port=8000,
         reload=True,

@@ -1,130 +1,117 @@
+"""
+Multimodal Emotion Recognition — End-to-End Pipeline & Architecture Demo
+========================================================================
+
+Demonstrates feature encoding and self-attention fusion across three modalities:
+  1. Vision (ViT [CLS] token 768-D -> 256-D)
+  2. Audio  (MFCC CNN -> 256-D)
+  3. Text   (BERT / TinyBERT 768-D -> 256-D)
+with modality embeddings (0=Vision, 1=Audio, 2=Text) fused into 5 target emotions.
+"""
+
 import torch
 import torch.nn as nn
-from audio_cnn import AudioCNN, predict_wav
 
-# ==========================================
-# 1. Other Modality Encoders (Placeholders)
-# ==========================================
-class TextEncoder(nn.Module):
-    """
-    Placeholder for a Text/Video encoder. 
-    In a real scenario, this could be a pre-trained BERT mapping to 256 dims.
-    """
-    def __init__(self, embed_dim=256):
-        super(TextEncoder, self).__init__()
-        # Simulating a projection from BERT (768) to the shared 256-dim space
-        self.embedding = nn.Linear(768, embed_dim)
-        
-    def forward(self, x):
-        # x shape: (batch_size, 768)
-        return self.embedding(x)
+from models.audio_cnn import AudioCNN
+from models.vision_encoder import VisionEncoder
+from models.text_encoder import TextEncoder
+from models.fusion import (
+    MultimodalTransformerFusion,
+    MODALITY_VISION,
+    MODALITY_AUDIO,
+    MODALITY_TEXT,
+    TARGET_EMOTIONS,
+)
 
-# ==========================================
-# 2. Transformer Fusion Module
-# ==========================================
-class MultimodalTransformerFusion(nn.Module):
-    """
-    Fuses exactly 256-dim vectors from multiple modalities (Audio, Text, etc.)
-    using Self-Attention, then classifies.
-    """
-    def __init__(self, embed_dim=256, num_heads=8, num_layers=2, num_classes=5):
-        super(MultimodalTransformerFusion, self).__init__()
-        
-        # Transformer Encoder Layer
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=embed_dim, 
-            nhead=num_heads, 
-            batch_first=True
-        )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        
-        # Classification Head
-        self.classifier = nn.Sequential(
-            nn.Linear(embed_dim, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, num_classes)
-        )
-        
-    def forward(self, audio_features, text_features):
-        """
-        audio_features: (batch_size, embed_dim)
-        text_features: (batch_size, embed_dim)
-        """
-        # Add sequence dimension and stack modalities: (batch_size, seq_len=2, embed_dim)
-        audio_seq = audio_features.unsqueeze(1)
-        text_seq = text_features.unsqueeze(1)
-        
-        # Shape: (batch_size, 2, 256)
-        fused_seq = torch.cat((audio_seq, text_seq), dim=1)
-        
-        # Pass through Transformer to let modalities attend to each other
-        transformer_out = self.transformer(fused_seq) # (batch_size, 2, 256)
-        
-        # Aggregate features (mean pooling across the sequence dimension)
-        pooled_features = torch.mean(transformer_out, dim=1) # (batch_size, 256)
-        
-        # Final Classification
-        logits = self.classifier(pooled_features)
-        return logits
 
-# ==========================================
-# 3. End-to-End System Integration
-# ==========================================
 class MultimodalEmotionRecognitionSystem(nn.Module):
     """
-    The master module that wraps the Audio Encoder, Text Encoder, and Fusion.
+    Master end-to-end architecture wrapping:
+      - VisionEncoder (ViT backbone [CLS] -> 256-D)
+      - AudioCNN (Conv2D feature extractor -> 256-D)
+      - TextEncoder (Linear projection -> 256-D)
+      - MultimodalTransformerFusion (Self-attention with modality type embeddings)
     """
-    def __init__(self, num_classes=5):
+
+    def __init__(self, num_classes: int = 5):
         super(MultimodalEmotionRecognitionSystem, self).__init__()
-        # Import the AudioCNN we just built
+        self.vision_encoder = VisionEncoder(embed_dim=256)
         self.audio_encoder = AudioCNN(num_classes=num_classes)
-        
-        # Init other encoders
         self.text_encoder = TextEncoder(embed_dim=256)
-        
-        # Init Fusion module
-        self.fusion_module = MultimodalTransformerFusion(embed_dim=256, num_classes=num_classes)
-        
-    def forward(self, audio_input, text_input):
-        # audio_input: (batch_size, 1, 40, 130)
-        # text_input: (batch_size, 768)
-        
-        # 1. Independent Modality Encoding
-        # CRITICAL: We bypass the audio_cnn's internal classifier and just grab the 256-dim feature!
-        audio_features = self.audio_encoder.forward_encoder(audio_input) # (batch_size, 256)
-        text_features = self.text_encoder(text_input)                    # (batch_size, 256)
-        
-        # 2. Transformer Fusion & Classification
-        logits = self.fusion_module(audio_features, text_features)       # (batch_size, 5)
-        return logits
+        self.fusion_module = MultimodalTransformerFusion(
+            embed_dim=256, num_classes=num_classes
+        )
+
+    def forward(
+        self,
+        vision_input: torch.Tensor | None = None,
+        audio_input: torch.Tensor | None = None,
+        text_input: torch.Tensor | None = None,
+    ) -> torch.Tensor | None:
+        """
+        Encodes each present modality to 256-D and fuses them via transformer self-attention.
+        """
+        vision_feat = self.vision_encoder(vision_input) if vision_input is not None else None
+        audio_feat = self.audio_encoder.forward_encoder(audio_input) if audio_input is not None else None
+        text_feat = self.text_encoder(text_input) if text_input is not None else None
+
+        return self.fusion_module.forward_modalities(
+            vision_feat=vision_feat,
+            audio_feat=audio_feat,
+            text_feat=text_feat,
+        )
+
 
 def run_pipeline_demo():
-    print("--- Initializing Multimodal End-to-End Pipeline ---")
-    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    
-    # Init end-to-end model
-    model = MultimodalEmotionRecognitionSystem().to(device)
+    print("=" * 60)
+    print(" Multimodal Emotion Recognition Pipeline Demo")
+    print(" Target Emotion Space:", TARGET_EMOTIONS)
+    print("=" * 60)
+
+    device = torch.device(
+        "cuda" if torch.cuda.is_available()
+        else "mps" if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    print(f"Device: {device}")
+
+    # Initialize End-to-End System
+    model = MultimodalEmotionRecognitionSystem(num_classes=len(TARGET_EMOTIONS)).to(device)
     model.eval()
-    
-    # Mock Batch Generation
-    batch_size = 4
-    # Mocking Audio: (batch, channels, mfcc, time)
-    mock_audio = torch.randn(batch_size, 1, 40, 130).to(device) 
-    # Mocking Text/Secondary Modality: (batch, BERT_dim)
-    mock_text = torch.randn(batch_size, 768).to(device)         
-    
-    print(f"\n1. Executing Forward Pass (Batch Size = {batch_size})...")
+
+    batch_size = 2
+    # Mock Modality Inputs
+    mock_vision = torch.randn(batch_size, 3, 224, 224).to(device)  # Face crop (B, C, H, W)
+    mock_audio = torch.randn(batch_size, 1, 40, 130).to(device)    # Audio MFCC (B, 1, n_mfcc, T)
+    mock_text = torch.randn(batch_size, 768).to(device)            # Text embedding (B, 768)
+
+    print(f"\n1. Testing Tri-Modal Forward Pass (Batch Size = {batch_size})...")
     with torch.no_grad():
-        logits = model(mock_audio, mock_text)
-        probs = torch.softmax(logits, dim=1)
-        predictions = torch.argmax(probs, dim=1)
-        
-    print("-> Pipeline Output Logits Shape:", logits.shape)
-    print("-> Pipeline Output Probabilities:\n", probs)
-    print("-> Predicted Emotion Classes:", predictions.tolist())
-    print("\n--- Pipeline Successfully Connected! ---")
+        logits = model(
+            vision_input=mock_vision,
+            audio_input=mock_audio,
+            text_input=mock_text,
+        )
+        probs = torch.softmax(logits, dim=-1)
+        preds = torch.argmax(probs, dim=-1)
+
+    print("-> Logits Output Shape:", logits.shape)
+    print("-> Predicted Emotion Indices:", preds.tolist())
+    print("-> Predicted Emotions:", [TARGET_EMOTIONS[i] for i in preds.tolist()])
+
+    print(f"\n2. Testing Partial Modalities (e.g., Vision + Audio only)...")
+    with torch.no_grad():
+        partial_logits = model(
+            vision_input=mock_vision,
+            audio_input=mock_audio,
+            text_input=None,
+        )
+        partial_preds = torch.argmax(torch.softmax(partial_logits, dim=-1), dim=-1)
+    print("-> Partial Modality Logits Shape:", partial_logits.shape)
+    print("-> Predicted Emotions:", [TARGET_EMOTIONS[i] for i in partial_preds.tolist()])
+
+    print("\n All modality flows and self-attention fusion verified successfully!")
+
 
 if __name__ == "__main__":
     run_pipeline_demo()

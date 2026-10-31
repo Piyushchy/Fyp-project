@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
-import librosa
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 import copy
 
@@ -189,6 +188,10 @@ def evaluate_model(model, test_loader):
 EMOTION_CLASSES = {0: 'Happy', 1: 'Sad', 2: 'Angry', 3: 'Fear', 4: 'Surprise'}
 
 def extract_mfcc(filepath, sr=22050, duration=3.0, n_mfcc=40, hop_length=512, max_len=130):
+    try:
+        import librosa
+    except ImportError:
+        raise ImportError("librosa is required for extract_mfcc. Install via 'pip install librosa'.")
     # Load audio
     y, sr = librosa.load(filepath, sr=sr, duration=duration)
     
