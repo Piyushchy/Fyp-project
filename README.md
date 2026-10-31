@@ -25,6 +25,22 @@ angry · disgust · fear · happy · neutral · sad · surprise
 
 ## Run it
 
+### Refactored Multimodal Application (Core)
+
+```bash
+# 1. Run the end-to-end tri-modal pipeline verification
+python main.py
+
+# 2. Launch the FastAPI WebSocket server
+uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+# Open http://localhost:8000/
+
+# 3. Train the multimodal fusion model
+python scripts/train_multimodal.py
+```
+
+### Production Deployment Server (vit-emotion-v2-deployment)
+
 ```bash
 python -m venv .venv && .venv\Scripts\activate      # Windows
 
@@ -70,14 +86,28 @@ batch-of-8: **63 ms CPU → 8.8 ms CUDA**. `EMOTION_DEVICE=cpu` forces CPU.
 
 ## Repository layout
 
-| Directory | What is in it |
+| Directory / File | Description |
 |---|---|
-| [`vit-emotion-v2-deployment/`](vit-emotion-v2-deployment/README.md) | The running system: face pipeline, fusion, FastAPI server, web UI, evaluation |
-| [`text-emotion-module/`](text-emotion-module/README.md) | The text modality: two training tasks, three architectures compared, benchmarks |
-| [`audio-emotion-module/`](audio-emotion-module/README.md) | The audio modality: four-corpus rebuild, speaker-disjoint splits, WavLM vs the branch's MFCC CNN |
-| [`training/`](training/) | Multi-dataset retraining for the face ViT: local GPU script + Colab notebook |
+| [`backend/`](backend/) | Refactored FastAPI application (`app.py`) with WebSocket routing for live multimodal inference |
+| [`frontend/`](frontend/) | Web interface and client dashboard (`index.html`) |
+| [`models/`](models/) | Modular neural architectures: `vision_encoder.py` (ViT [CLS] 768→256), `audio_cnn.py`, `text_encoder.py`, and `fusion.py` (`MultimodalTransformerFusion` with modality embeddings) |
+| [`scripts/`](scripts/) | Multimodal training (`train_multimodal.py`) and landmark extraction tools (`face_landmark.py`) |
+| [`main.py`](main.py) | End-to-end integration demo verifying tri-modal and dual-modal transformer fusion |
+| [`vit-emotion-v2-deployment/`](vit-emotion-v2-deployment/README.md) | Production deployment server: face pipeline, logarithmic opinion pooling fusion, evaluation |
+| [`text-emotion-module/`](text-emotion-module/README.md) | Text modality: GoEmotions training, TinyBERT / RoBERTa benchmarks |
+| [`audio-emotion-module/`](audio-emotion-module/README.md) | Audio modality: four-corpus rebuild, speaker-disjoint splits, WavLM vs MFCC CNN |
+| [`training/`](training/) | Multi-dataset retraining for the face ViT on FER2013 + AffectNet + RAF-DB |
 
-Each directory has its own README with the detail. This page is the map.
+---
+
+## Multimodal Architecture & Fusion
+
+The core pipeline standardizes all modalities into a 256-dimensional latent space:
+
+1. **Vision (`models/vision_encoder.py`):** Extracts the 768-D `[CLS]` token from the Vision Transformer backbone and projects it via `Linear(768, 256) + LayerNorm`.
+2. **Audio (`models/audio_cnn.py`):** Encodes MFCC spectrograms through a 4-layer 2D convolutional network into a 256-D vector.
+3. **Text (`models/text_encoder.py`):** Projects 768-D linguistic representations (BERT / TinyBERT) down to 256-D.
+4. **Transformer Fusion (`models/fusion.py`):** Injects learnable modality type embeddings (`nn.Embedding(3, 256)`: `0=Vision, 1=Audio, 2=Text`) to retain modality identity, processes the token sequence through multi-head self-attention (`TransformerEncoder`), and classifies the pooled representation into 5 target emotions (`happy, sad, angry, fear, surprise`).
 
 ---
 
