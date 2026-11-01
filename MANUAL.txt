@@ -1,0 +1,217 @@
+================================================================================
+MULTIMODAL EMOTION RECOGNITION — COMPLETE STEP-BY-STEP EXECUTION GUIDE
+================================================================================
+Project : Fyp-project (Multimodal Emotion Recognition)
+Modalities: Face (ViT) + Audio (MFCC CNN) + Text (BERT)
+Emotions  : happy | sad | angry | fear | surprise
+Branch    : refactor/multimodal-clean
+Optimized : Fast batch feature extraction (~2-3 mins on Kaggle GPU)
+Last Updated: 2026-11-01
+================================================================================
+
+TABLE OF CONTENTS
+--------------------------------------------------------------------------------
+PHASE A — Local Machine Setup (one-time)
+PHASE B — Upload Code to Kaggle as a Dataset
+PHASE C — Train the Model on Kaggle (Free GPU — High Speed ~3 Mins)
+PHASE D — Download Trained Model & Deploy Locally
+PHASE E — Run the Live Web Application
+PHASE F — Troubleshooting & FAQ
+CHEAT SHEET — Quick Reference Commands
+
+================================================================================
+PHASE A — LOCAL MACHINE SETUP (one-time, ~10 minutes)
+================================================================================
+
+A1. Open a terminal (PowerShell or Command Prompt) and go to your project folder:
+
+    cd d:\Telemedicine\Fyp-project
+
+A2. Make sure you are on the refactored branch:
+
+    git checkout refactor/multimodal-clean
+
+    (You should see: "Switched to branch 'refactor/multimodal-clean'")
+
+A3. Create a virtual environment:
+
+    python -m venv venv
+
+A4. Activate the virtual environment:
+
+    venv\Scripts\activate
+
+    (Your terminal prompt will now show "(venv)" at the start)
+
+A5. Install all required packages:
+
+    pip install --upgrade pip
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+    pip install transformers fastapi uvicorn websockets opencv-python mediapipe numpy scikit-learn librosa python-multipart
+
+    NOTE: This installs the CPU version of PyTorch for local running.
+          The GPU version will be used automatically on Kaggle.
+
+A6. Verify the architecture is working correctly:
+
+    python main.py
+
+    Expected output (last few lines):
+        -> Tri-modal Logits Output Shape: torch.Size([2, 5])
+        -> Partial Modality Logits Shape: torch.Size([2, 5])
+        All modality flows and self-attention fusion verified successfully!
+
+    If you see this — your local setup is complete.
+
+================================================================================
+PHASE B — UPLOAD YOUR CODE TO KAGGLE (one-time, ~2 minutes)
+================================================================================
+
+A clean zip file named `fyp-code.zip` has already been generated for you at:
+`d:\Telemedicine\Fyp-project\fyp-code.zip`
+
+It contains only your models, scripts, and main test file.
+
+B1. Go to Kaggle:
+    - Open: https://www.kaggle.com/datasets
+    - Click "New Dataset" (blue button at top right)
+    - Set Title: fyp-code
+    - Drag and drop: d:\Telemedicine\Fyp-project\fyp-code.zip
+    - Visibility: Private
+    - Click "Create"
+    - Wait ~30 seconds for Kaggle to finish processing.
+
+================================================================================
+PHASE C — TRAIN ON KAGGLE (High-Speed GPU Pipeline: ~2-3 Minutes Total)
+================================================================================
+
+C1. Create a new Kaggle Notebook:
+    - Go to: https://www.kaggle.com/notebooks
+    - Click "New Notebook"
+
+C2. Turn ON GPU Acceleration:
+    - On the right sidebar, click the three dots or look under "Session options"
+    - Set "Accelerator" to: GPU P100 (or GPU T4 x2)
+    - Click "Save"
+    - The top toolbar will show a green dot next to "GPU".
+
+C3. Add your datasets to the notebook:
+    - Click "+ Add Input" (or "Add Data") at the top right of the notebook
+    - Search and add:
+        1. Your FER image dataset (FER2013)
+        2. Your Audio dataset (RAVDESS)
+        3. Your Text dataset
+        4. fyp-code (your uploaded code dataset from Phase B)
+
+C4. CELL 1 — Copy code to working directory (Auto-locates files):
+    Paste and run:
+
+    import os, shutil
+
+    for root, dirs, files in os.walk("/kaggle/input"):
+        if "fusion.py" in files:
+            src = root
+            dst = "/kaggle/working/models"
+            if os.path.exists(dst): shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+            print("Copied models/ from", src)
+
+        if "train_multimodal.py" in files:
+            src = root
+            dst = "/kaggle/working/scripts"
+            if os.path.exists(dst): shutil.rmtree(dst)
+            shutil.copytree(src, dst)
+            print("Copied scripts/ from", src)
+
+        if "main.py" in files and root != "/kaggle/working":
+            shutil.copy(os.path.join(root, "main.py"), "/kaggle/working/main.py")
+            print("Copied main.py from", root)
+
+    print("\nFiles in /kaggle/working:")
+    print(os.listdir("/kaggle/working"))
+
+C5. CELL 2 — Install librosa (quiet mode):
+    Paste and run:
+
+    !pip install -q librosa
+
+C6. CELL 3 — Run the High-Speed Training Script:
+    Paste and run:
+
+    import os
+    os.chdir("/kaggle/working")
+    !python scripts/train_multimodal.py
+
+    What happens now:
+    - Step 1: Automatically detects FER2013, RAVDESS, and Text paths in /kaggle/input!
+    - Step 2: Extracts unique text BERT features in GPU batches (~20 sec)
+    - Step 3: Extracts unique audio MFCC features (~30 sec)
+    - Step 4: Extracts image ViT features in GPU batches (~60 sec)
+    - Step 5: Caches all features to /kaggle/working/cache/
+    - Step 6: Trains the 40 epochs in under 30 seconds!
+    - Step 7: Evaluates test accuracy & confusion matrix
+    - Step 8: Saves `best_fusion.pth` and `data_Finalmodel.pt` in `/kaggle/working/`
+
+    Total execution time: ~2 to 3 minutes!
+
+================================================================================
+PHASE D — DOWNLOAD TRAINED MODEL & DEPLOY LOCALLY (~1 minute)
+================================================================================
+
+D1. Download the checkpoint from Kaggle:
+    - On the right sidebar of your Kaggle notebook, click the "Output" tab.
+    - Click refresh if needed.
+    - You will see:
+        - best_fusion.pth
+        - data_Finalmodel.pt
+    - Click the three dots next to `best_fusion.pth` -> Download.
+
+D2. Place the file in your project root on your PC:
+    Move `best_fusion.pth` from your Downloads folder to:
+    d:\Telemedicine\Fyp-project\best_fusion.pth
+
+    In PowerShell:
+    Move-Item "$env:USERPROFILE\Downloads\best_fusion.pth" "d:\Telemedicine\Fyp-project\best_fusion.pth" -Force
+
+================================================================================
+PHASE E — RUN THE LIVE WEB APPLICATION
+================================================================================
+
+E1. Open PowerShell and go to your project folder:
+
+    cd d:\Telemedicine\Fyp-project
+
+E2. Activate the virtual environment:
+
+    venv\Scripts\activate
+
+E3. Start the FastAPI server:
+
+    uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+
+E4. You will see:
+    - "VisionEncoder (ViT 768->256) initialised"
+    - "Fusion weights loaded from ... best_fusion.pth"
+    - "Uvicorn running on http://0.0.0.0:8000"
+
+E5. Open in your browser:
+    http://localhost:8000/
+
+    Allow webcam & microphone permissions. The multimodal dashboard will now
+    perform real-time emotion recognition across Video, Audio, and Text!
+
+================================================================================
+CHEAT SHEET — QUICK REFERENCE COMMANDS
+================================================================================
+
+-- Run the Live Server --
+cd d:\Telemedicine\Fyp-project
+venv\Scripts\activate
+uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+
+-- Open Web Dashboard --
+http://localhost:8000/
+
+-- Stop Server --
+Press Ctrl + C
+================================================================================
