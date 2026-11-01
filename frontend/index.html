@@ -883,9 +883,48 @@
           </div>
         </div>
 
+        <!-- Modality Attention Weights -->
+        <div class="glass-card animate-in delay-5" style="margin-bottom: 16px;">
+          <div class="card-header">
+            <h2>Modality Weights</h2>
+            <span class="card-badge" id="fusionAttentionBadge">Attention</span>
+          </div>
+          <div class="card-body">
+            <div class="confidence-bar-wrapper" style="margin-bottom: 10px;">
+              <div class="confidence-bar-header">
+                <span class="label">👁️ Video (Face)</span>
+                <span class="value" id="weightVisionVal">0%</span>
+              </div>
+              <div class="confidence-bar-track">
+                <div class="confidence-bar-fill" id="weightVisionBar" style="width: 0%; background: var(--accent-blue);"></div>
+              </div>
+            </div>
+
+            <div class="confidence-bar-wrapper" style="margin-bottom: 10px;">
+              <div class="confidence-bar-header">
+                <span class="label">🎙️ Audio (Voice)</span>
+                <span class="value" id="weightAudioVal">0%</span>
+              </div>
+              <div class="confidence-bar-track">
+                <div class="confidence-bar-fill" id="weightAudioBar" style="width: 0%; background: var(--accent-purple);"></div>
+              </div>
+            </div>
+
+            <div class="confidence-bar-wrapper">
+              <div class="confidence-bar-header">
+                <span class="label">💬 Text (Speech)</span>
+                <span class="value" id="weightTextVal">0%</span>
+              </div>
+              <div class="confidence-bar-track">
+                <div class="confidence-bar-fill" id="weightTextBar" style="width: 0%; background: var(--accent-green);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Distribution -->
         <div class="glass-card animate-in delay-5">
-          <div class="card-header"><h2>Distribution</h2></div>
+          <div class="card-header"><h2>Emotion Probabilities</h2></div>
           <div class="card-body emotion-history" id="emotionDistribution">
             <!-- built by JS -->
           </div>
@@ -908,18 +947,22 @@
     const AUDIO_CHUNK_INTERVAL_MS = 1500;   // send audio every 1.5s
 
     const EMOTION_EMOJIS = {
-      angry:    '😠', disgust: '🤢', fear:    '😨',
-      happy:    '😊', neutral: '😐', sad:     '😢',
+      happy:    '😊',
+      sad:      '😢',
+      angry:    '😠',
+      fear:     '😨',
       surprise: '😲',
     };
 
     const EMOTION_COLORS = {
-      angry:    '#f87171', disgust: '#a78bfa', fear:    '#c084fc',
-      happy:    '#fbbf24', neutral: '#94a3b8', sad:     '#60a5fa',
+      happy:    '#fbbf24',
+      sad:      '#60a5fa',
+      angry:    '#f87171',
+      fear:     '#c084fc',
       surprise: '#34d399',
     };
 
-    const EMOTION_KEYS = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'];
+    const EMOTION_KEYS = ['happy', 'sad', 'angry', 'fear', 'surprise'];
 
     const distribution = {};
     EMOTION_KEYS.forEach(k => distribution[k] = 0);
@@ -979,6 +1022,13 @@
     const $pillAudio    = document.getElementById('pillAudio');
     const $pillText     = document.getElementById('pillText');
     const $emotionSrcTag= document.getElementById('emotionSourceTag');
+    const $weightVisionVal = document.getElementById('weightVisionVal');
+    const $weightVisionBar = document.getElementById('weightVisionBar');
+    const $weightAudioVal  = document.getElementById('weightAudioVal');
+    const $weightAudioBar  = document.getElementById('weightAudioBar');
+    const $weightTextVal   = document.getElementById('weightTextVal');
+    const $weightTextBar   = document.getElementById('weightTextBar');
+    const $fusionAttentionBadge = document.getElementById('fusionAttentionBadge');
 
     /* ==========================================================
        DISTRIBUTION PANEL
@@ -1530,8 +1580,12 @@
         $statConfVal.textContent = (conf * 100).toFixed(1) + '%';
         $statConfBar.style.width = (conf * 100) + '%';
 
-        // Modality badge
+        // Modality badge & pill indicators
         $fusionBadge.textContent = mods.length + ' mod';
+        $pillVideo.classList.toggle('active', mods.includes('vision'));
+        $pillAudio.classList.toggle('active', mods.includes('audio'));
+        $pillText.classList.toggle('active', mods.includes('text'));
+
         if (mods.length >= 2) {
           $emotionSrcTag.className = 'emotion-source-tag tag-fusion';
           $emotionSrcTag.textContent = 'Fusion (' + mods.join('+') + ')';
@@ -1540,18 +1594,30 @@
           $emotionSrcTag.textContent = mods[0] || 'vision';
         }
 
-        // Distribution EMA
-        const alpha = 0.25;
-        EMOTION_KEYS.forEach(k => distribution[k] *= (1 - alpha));
-        distribution[label] = distribution[label] + alpha * 1.0;
-        const total = EMOTION_KEYS.reduce((s, k) => s + distribution[k], 0) || 1;
-        EMOTION_KEYS.forEach(k => {
-          const pct = (distribution[k] / total) * 100;
-          const bar = document.getElementById(`dist-${k}`);
-          const val = document.getElementById(`distv-${k}`);
-          if (bar) bar.style.width = pct.toFixed(1) + '%';
-          if (val) val.textContent = pct.toFixed(0) + '%';
-        });
+        // Modality Attention Weights Breakdown
+        if (fusion.modality_weights) {
+          const mw = fusion.modality_weights;
+          const vW = (mw.vision || 0) * 100;
+          const aW = (mw.audio || 0) * 100;
+          const tW = (mw.text || 0) * 100;
+          if ($weightVisionBar) $weightVisionBar.style.width = vW.toFixed(1) + '%';
+          if ($weightVisionVal) $weightVisionVal.textContent = vW.toFixed(0) + '%';
+          if ($weightAudioBar) $weightAudioBar.style.width = aW.toFixed(1) + '%';
+          if ($weightAudioVal) $weightAudioVal.textContent = aW.toFixed(0) + '%';
+          if ($weightTextBar) $weightTextBar.style.width = tW.toFixed(1) + '%';
+          if ($weightTextVal) $weightTextVal.textContent = tW.toFixed(0) + '%';
+        }
+
+        // Real Multimodal Emotion Probability Distribution
+        if (fusion.probs) {
+          EMOTION_KEYS.forEach(k => {
+            const pct = (fusion.probs[k] != null ? fusion.probs[k] : 0) * 100;
+            const bar = document.getElementById(`dist-${k}`);
+            const val = document.getElementById(`distv-${k}`);
+            if (bar) bar.style.width = pct.toFixed(1) + '%';
+            if (val) val.textContent = pct.toFixed(0) + '%';
+          });
+        }
 
       } else if (data.face_detected && data.vit_prediction) {
         // Fallback: show ViT-only result

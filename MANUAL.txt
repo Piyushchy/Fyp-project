@@ -47,7 +47,7 @@ A5. Install all required packages:
 
     pip install --upgrade pip
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-    pip install transformers fastapi uvicorn websockets opencv-python mediapipe numpy scikit-learn librosa python-multipart
+    pip install transformers fastapi uvicorn websockets opencv-python mediapipe numpy scikit-learn librosa python-multipart onnxruntime
 
     NOTE: This installs the CPU version of PyTorch for local running.
           The GPU version will be used automatically on Kaggle.

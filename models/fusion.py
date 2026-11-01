@@ -77,6 +77,19 @@ class MultimodalTransformerFusion(nn.Module):
         Returns:
             Logits of shape (batch_size, num_classes)
         """
+        logits, _ = self.forward_with_weights(features, modality_ids)
+        return logits
+
+    def forward_with_weights(
+        self,
+        features: torch.Tensor,
+        modality_ids: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Batched forward pass returning both classification logits and per-modality contribution weights.
+        Returns:
+            (logits, modality_weights): (B, num_classes) and (B, seq_len)
+        """
         if modality_ids.dim() == 1:
             modality_ids = modality_ids.unsqueeze(0).expand(features.size(0), -1)
 
@@ -87,28 +100,35 @@ class MultimodalTransformerFusion(nn.Module):
         # Transformer self-attention across modality tokens
         transformer_out = self.transformer(x)  # (batch_size, seq_len, embed_dim)
 
+        # Modality contribution weights from attention feature representation norms
+        token_energy = torch.norm(transformer_out, p=2, dim=-1)  # (batch_size, seq_len)
+        modality_weights = F.softmax(token_energy, dim=-1)        # (batch_size, seq_len)
+
         # Mean pooling across available modality sequence tokens
         pooled = torch.mean(transformer_out, dim=1)  # (batch_size, embed_dim)
 
         # Classification head
         logits = self.classifier(pooled)
-        return logits
+        return logits, modality_weights
 
     def forward_modalities(
         self,
         vision_feat: Optional[torch.Tensor] = None,
         audio_feat: Optional[torch.Tensor] = None,
         text_feat: Optional[torch.Tensor] = None,
-    ) -> Optional[torch.Tensor]:
+        return_weights: bool = False,
+    ) -> Union[Optional[torch.Tensor], Tuple[Optional[torch.Tensor], Dict[str, float]]]:
         """
         Flexible convenience forward pass for 1, 2, or 3 modalities.
         Accepts individual 256-D feature tensors of shape (batch_size, 256) or (256,).
 
         Returns:
             Logits tensor of shape (batch_size, num_classes), or None if no modalities provided.
+            If return_weights=True, returns (logits, modality_weights_dict).
         """
         tokens: List[torch.Tensor] = []
         ids: List[int] = []
+        modality_names: List[str] = []
         device = next(self.parameters()).device
 
         def format_vector(v: torch.Tensor) -> torch.Tensor:
@@ -119,21 +139,33 @@ class MultimodalTransformerFusion(nn.Module):
         if vision_feat is not None:
             tokens.append(format_vector(vision_feat).unsqueeze(1))  # (B, 1, 256)
             ids.append(MODALITY_VISION)
+            modality_names.append("vision")
 
         if audio_feat is not None:
             tokens.append(format_vector(audio_feat).unsqueeze(1))  # (B, 1, 256)
             ids.append(MODALITY_AUDIO)
+            modality_names.append("audio")
 
         if text_feat is not None:
             tokens.append(format_vector(text_feat).unsqueeze(1))  # (B, 1, 256)
             ids.append(MODALITY_TEXT)
+            modality_names.append("text")
 
         if not tokens:
-            return None
+            return (None, {}) if return_weights else None
 
         # Concatenate tokens along sequence dimension: (batch_size, num_modalities, 256)
         seq = torch.cat(tokens, dim=1).to(device)
         mod_ids = torch.tensor(ids, dtype=torch.long, device=device).unsqueeze(0).expand(seq.size(0), -1)
 
-        return self.forward(seq, mod_ids)
+        logits, weights = self.forward_with_weights(seq, mod_ids)
+
+        if return_weights:
+            weights_np = weights[0].detach().cpu().numpy()
+            weights_dict = {
+                name: round(float(w), 4) for name, w in zip(modality_names, weights_np)
+            }
+            return logits, weights_dict
+
+        return logits
 

@@ -108,19 +108,22 @@ _std: np.ndarray = np.array([0.5, 0.5, 0.5], dtype=np.float32)
 _face_detector: Any = None
 _detector_type: str = "adaptive_center"
 
-# --- Audio (AudioCNN encoder) ---
-_audio_cnn: AudioCNN | None = None
+# --- Multimodal Trained Pipeline (data_Finalmodel.pt) ---
+_t_fc: nn.Linear | None = None
+_audio_cnn_seq: nn.Sequential | None = None
+_a_fc: nn.Linear | None = None
+_v_fc: nn.Linear | None = None
+_fusion_module: MultimodalTransformerFusion | None = None
 
-# --- Text (TinyBERT) ---
-_text_tokenizer = None
-_text_model = None
+# --- Text Modality Backbone (BERT) ---
+_text_tokenizer: Any = None
+_text_model: Any = None
 
-# --- Vision (ViT 768->256 Encoder) ---
+# --- Vision Modality Backbone (ViT) ---
 _vision_encoder: VisionEncoder | None = None
 
-# --- Fusion ---
-_fusion_module: MultimodalTransformerFusion | None = None
-_text_encoder: TextEncoder | None = None
+# Legacy AudioCNN (optional fallback)
+_audio_cnn: AudioCNN | None = None
 
 # PyTorch device
 _device: torch.device = torch.device("cpu")
@@ -141,9 +144,8 @@ async def lifespan(_app: FastAPI):
     global _onnx_session, _onnx_input_name
     global _id2label, _image_size, _mean, _std
     global _face_detector, _detector_type
-    global _audio_cnn
-    global _text_tokenizer, _text_model
-    global _fusion_module, _text_encoder, _vision_encoder
+    global _t_fc, _audio_cnn_seq, _a_fc, _v_fc, _fusion_module
+    global _text_tokenizer, _text_model, _vision_encoder
     global _device, VIT_EMOTION_CLASSES
 
     _device = torch.device(
@@ -203,50 +205,66 @@ async def lifespan(_app: FastAPI):
         logger.warning("Face detector init fallback: %s; using adaptive center crop", exc)
         _detector_type = "adaptive_center"
 
-    # ---- AudioCNN encoder ----
-    _audio_cnn = AudioCNN(num_classes=5).to(_device)
-    audio_ckpt = _PROJECT_ROOT / "best_audio_cnn.pth"
-    if audio_ckpt.exists():
-        _audio_cnn.load_state_dict(torch.load(str(audio_ckpt), map_location=_device))
-        logger.info("AudioCNN weights loaded from %s", audio_ckpt)
+    # ---- Multimodal Pipeline Architecture (matches train_multimodal.py) ----
+    _t_fc = nn.Linear(768, 256).to(_device)
+    _audio_cnn_seq = nn.Sequential(
+        nn.Conv2d(1, 32, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+        nn.Conv2d(32, 64, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+        nn.Conv2d(64, 128, 3, padding=1), nn.ReLU(),
+        nn.AdaptiveAvgPool2d((1, 1))
+    ).to(_device)
+    _a_fc = nn.Linear(128, 256).to(_device)
+    _v_fc = nn.Linear(768, 256).to(_device)
+    _fusion_module = MultimodalTransformerFusion(embed_dim=256, num_classes=5).to(_device)
+
+    # ---- Load trained weights from data_Finalmodel.pt or best_fusion.pth ----
+    final_model_ckpt = _PROJECT_ROOT / "data_Finalmodel.pt"
+    if final_model_ckpt.exists():
+        try:
+            ckpt = torch.load(str(final_model_ckpt), map_location=_device)
+            _t_fc.load_state_dict({"weight": ckpt["t_fc.weight"], "bias": ckpt["t_fc.bias"]})
+            cnn_dict = {k.replace("audio_cnn.", ""): v for k, v in ckpt.items() if k.startswith("audio_cnn.")}
+            _audio_cnn_seq.load_state_dict(cnn_dict)
+            _a_fc.load_state_dict({"weight": ckpt["a_fc.weight"], "bias": ckpt["a_fc.bias"]})
+            _v_fc.load_state_dict({"weight": ckpt["v_fc.weight"], "bias": ckpt["v_fc.bias"]})
+            fusion_dict = {k.replace("fusion.", ""): v for k, v in ckpt.items() if k.startswith("fusion.")}
+            _fusion_module.load_state_dict(fusion_dict)
+            logger.info("Successfully loaded complete multimodal pipeline from %s", final_model_ckpt)
+        except Exception as err:
+            logger.error("Failed loading data_Finalmodel.pt: %s", err)
+    elif (_PROJECT_ROOT / "best_fusion.pth").exists():
+        fusion_ckpt = _PROJECT_ROOT / "best_fusion.pth"
+        try:
+            _fusion_module.load_state_dict(torch.load(str(fusion_ckpt), map_location=_device))
+            logger.info("Fusion weights loaded from %s", fusion_ckpt)
+        except Exception as err:
+            logger.warning("Could not load best_fusion.pth: %s", err)
     else:
-        logger.warning("No AudioCNN checkpoint at %s — using random init", audio_ckpt)
-    _audio_cnn.eval()
+        logger.warning("No multimodal checkpoint found — using random init")
 
-    # ---- Text model (TinyBERT) ----
-    if TEXT_CHECKPOINT_DIR.exists():
-        _text_tokenizer = AutoTokenizer.from_pretrained(str(TEXT_CHECKPOINT_DIR))
-        _text_model = AutoModelForSequenceClassification.from_pretrained(
-            str(TEXT_CHECKPOINT_DIR)
-        ).to(_device)
-        _text_model.eval()
-        logger.info("TinyBERT text model loaded from %s", TEXT_CHECKPOINT_DIR)
-    else:
-        logger.warning("No TinyBERT checkpoint at %s — text disabled", TEXT_CHECKPOINT_DIR)
+    _t_fc.eval()
+    _audio_cnn_seq.eval()
+    _a_fc.eval()
+    _v_fc.eval()
+    _fusion_module.eval()
 
-    # ---- TextEncoder (768→256 projection) ----
-    _text_encoder = TextEncoder(embed_dim=256).to(_device)
-    _text_encoder.eval()
-    logger.info("TextEncoder projection layer initialised")
-
-    # ---- VisionEncoder (ViT [CLS] 768→256 projection) ----
+    # ---- VisionEncoder (ViT [CLS] 768 representation) ----
     _vision_encoder = VisionEncoder(embed_dim=256).to(_device)
     _vision_encoder.eval()
-    logger.info("VisionEncoder (ViT 768→256) initialised")
+    logger.info("VisionEncoder (ViT 768->256) initialised")
 
-    # ---- Fusion module ----
-    _fusion_module = MultimodalTransformerFusion(
-        embed_dim=256, num_classes=5
-    ).to(_device)
-    fusion_ckpt = _PROJECT_ROOT / "best_fusion.pth"
-    if fusion_ckpt.exists():
-        _fusion_module.load_state_dict(
-            torch.load(str(fusion_ckpt), map_location=_device)
-        )
-        logger.info("Fusion weights loaded from %s", fusion_ckpt)
-    else:
-        logger.warning("No fusion checkpoint at %s — using random init", fusion_ckpt)
-    _fusion_module.eval()
+    # ---- BERT Text Backbone (bert-base-uncased) ----
+    try:
+        from transformers import BertTokenizer, BertModel
+        logger.info("Loading BERT text model (bert-base-uncased)...")
+        _text_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        _text_model = BertModel.from_pretrained("bert-base-uncased").to(_device)
+        _text_model.eval()
+        for p in _text_model.parameters():
+            p.requires_grad = False
+        logger.info("BERT text model initialised successfully")
+    except Exception as exc:
+        logger.warning("BERT text model deferred: %s", exc)
 
     yield  # ── application runs ──
 
@@ -370,30 +388,21 @@ def run_vit_inference(face_crop: np.ndarray) -> tuple[dict[str, Any], np.ndarray
     }, logits
 
 
-def extract_vision_feature(face_crop: np.ndarray) -> torch.Tensor:
-    """Extract 256-D feature representation from face crop using VisionEncoder (ViT [CLS] 768->256)."""
-    assert _vision_encoder is not None
-    tensor_np = preprocess_face(face_crop)
-    tensor_torch = torch.from_numpy(tensor_np).to(_device)
-    with torch.no_grad():
-        return _vision_encoder(tensor_torch)
-
-
-def vit_logits_to_256(logits: np.ndarray) -> torch.Tensor:
-    """[DEPRECATED] Project 7-dim logits to 256-dim feature.
-    Kept for backwards-compatibility; superseded by extract_vision_feature.
-    """
-    if not hasattr(vit_logits_to_256, "_proj"):
-        proj = nn.Linear(len(_id2label), 256).to(_device)
-        proj.eval()
-        proj_ckpt = _PROJECT_ROOT / "vit_proj_256.pth"
-        if proj_ckpt.exists():
-            proj.load_state_dict(torch.load(str(proj_ckpt), map_location=_device))
-        vit_logits_to_256._proj = proj
-
-    with torch.no_grad():
-        t = torch.tensor(logits, dtype=torch.float32).unsqueeze(0).to(_device)
-        return vit_logits_to_256._proj(t)
+def extract_vision_feature(face_crop: np.ndarray) -> torch.Tensor | None:
+    """Extract 256-D feature representation from face crop using ViT [CLS] (768) -> trained v_fc -> ReLU."""
+    if _vision_encoder is None:
+        return None
+    try:
+        tensor_np = preprocess_face(face_crop)
+        tensor_torch = torch.from_numpy(tensor_np).to(_device)
+        with torch.no_grad():
+            if _v_fc is not None:
+                cls_768 = _vision_encoder.extract_cls(tensor_torch)
+                return torch.relu(_v_fc(cls_768))
+            return _vision_encoder(tensor_torch)
+    except Exception as exc:
+        logger.debug("extract_vision_feature error: %s", exc)
+        return None
 
 
 # ============================================================
@@ -443,85 +452,77 @@ def decode_wav_bytes(raw_b64: str) -> np.ndarray | None:
     return None
 
 
-def extract_mfcc_from_array(
-    y: np.ndarray,
-    sr: int = 22050,
-    n_mfcc: int = 40,
-    hop_length: int = 512,
-    max_len: int = 130,
-) -> np.ndarray:
-    """Extract normalised MFCCs from a float32 waveform array.
+def encode_audio(audio_samples: np.ndarray) -> torch.Tensor | None:
+    """audio_samples -> MFCC (200, 40) -> trained audio_cnn_seq -> trained a_fc -> ReLU -> (1, 256)."""
+    if _audio_cnn_seq is None or _a_fc is None:
+        return None
+    try:
+        # Extract MFCC matching train_multimodal.py (sr=16000, n_mfcc=40, max_len=200)
+        signal = audio_samples
+        mfcc = librosa.feature.mfcc(y=signal, sr=16000, n_mfcc=40).T
+        if len(mfcc) < 200:
+            mfcc = np.pad(mfcc, ((0, 200 - len(mfcc)), (0, 0)))
+        else:
+            mfcc = mfcc[:200]
+        mfcc = mfcc.astype(np.float32)
 
-    Returns shape (40, max_len).
-    """
-    # Resample if needed — browser typically sends 44100 or 48000
-    # librosa.feature.mfcc handles the sr parameter internally.
-    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc, hop_length=hop_length)
-
-    # Pad or truncate
-    if mfcc.shape[1] < max_len:
-        mfcc = np.pad(mfcc, ((0, 0), (0, max_len - mfcc.shape[1])), mode="constant")
-    else:
-        mfcc = mfcc[:, :max_len]
-
-    # Per-feature normalisation
-    m = np.mean(mfcc, axis=1, keepdims=True)
-    s = np.std(mfcc, axis=1, keepdims=True) + 1e-8
-    return ((mfcc - m) / s).astype(np.float32)
-
-
-def encode_audio(audio_samples: np.ndarray) -> torch.Tensor:
-    """audio_samples (float32 1-D) → AudioCNN encoder → (1, 256)."""
-    assert _audio_cnn is not None
-    mfcc = extract_mfcc_from_array(audio_samples)
-    # (1, 1, 40, 130)
-    t = torch.tensor(mfcc, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(_device)
-    with torch.no_grad():
-        return _audio_cnn.forward_encoder(t)  # (1, 256)
+        # (1, 200, 40)
+        t = torch.tensor(mfcc, dtype=torch.float32).unsqueeze(0).to(_device)
+        with torch.no_grad():
+            a = t.permute(0, 2, 1).unsqueeze(1)  # (1, 1, 40, 200)
+            a = _audio_cnn_seq(a)
+            a = a.view(a.size(0), -1)
+            return torch.relu(_a_fc(a))  # (1, 256)
+    except Exception as e:
+        logger.debug("encode_audio error: %s", e)
+        return None
 
 
 # ============================================================
-# TEXT HELPERS
+# TEXT HELPERS (BERT-base-uncased)
 # ============================================================
+
+def get_bert():
+    """Lazily load BERT backbone for text sentiment encoding."""
+    global _text_tokenizer, _text_model
+    if _text_tokenizer is None or _text_model is None:
+        try:
+            from transformers import BertTokenizer, BertModel
+            logger.info("Loading BERT model for real-time text sentiment encoding...")
+            _text_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+            _text_model = BertModel.from_pretrained("bert-base-uncased").to(_device)
+            _text_model.eval()
+            for p in _text_model.parameters():
+                p.requires_grad = False
+            logger.info("BERT text model ready")
+        except Exception as e:
+            logger.warning("Could not load BERT model: %s", e)
+    return _text_tokenizer, _text_model
+
 
 def encode_text(text: str) -> torch.Tensor | None:
-    """text → TinyBERT hidden state (768) → TextEncoder → (1, 256)."""
-    if _text_model is None or _text_tokenizer is None or _text_encoder is None:
+    """text -> BERT [CLS] (768) -> trained t_fc -> ReLU -> (1, 256)."""
+    if not text or not text.strip() or _t_fc is None:
         return None
-    if not text or not text.strip():
+    tok, bert_model = get_bert()
+    if tok is None or bert_model is None:
         return None
 
-    encoded = _text_tokenizer(
-        text.strip(),
-        truncation=True,
-        max_length=128,
-        return_tensors="pt",
-    ).to(_device)
+    try:
+        tokens = tok(
+            text.strip(),
+            padding=True,
+            truncation=True,
+            max_length=128,
+            return_tensors="pt",
+        ).to(_device)
 
-    with torch.no_grad():
-        outputs = _text_model(**encoded, output_hidden_states=True)
-        # Use [CLS] token from last hidden state → (1, hidden_size)
-        cls_hidden = outputs.hidden_states[-1][:, 0, :]  # (1, hidden_size)
-
-        # TinyBERT hidden size is 312, not 768 — handle dynamically
-        hidden_dim = cls_hidden.shape[1]
-
-        # Lazy-init a projection that matches actual hidden dim
-        if not hasattr(encode_text, "_proj") or encode_text._proj_dim != hidden_dim:
-            encode_text._proj = nn.Linear(hidden_dim, 256).to(_device)
-            encode_text._proj.eval()
-            encode_text._proj_dim = hidden_dim
-
-            txt_proj_ckpt = _PROJECT_ROOT / "text_proj_256.pth"
-            if txt_proj_ckpt.exists():
-                encode_text._proj.load_state_dict(
-                    torch.load(str(txt_proj_ckpt), map_location=_device)
-                )
-                logger.info("Text→256 projection loaded from %s", txt_proj_ckpt)
-            else:
-                logger.warning("No text_proj_256.pth — using random projection")
-
-        return encode_text._proj(cls_hidden)  # (1, 256)
+        with torch.no_grad():
+            cls_768 = bert_model(**tokens).last_hidden_state[:, 0, :]  # (1, 768)
+            return torch.relu(_t_fc(cls_768))  # (1, 256)
+    except Exception as exc:
+        logger.debug("encode_text error: %s", exc)
+        return None
 
 
 # ============================================================
@@ -538,9 +539,11 @@ def fuse_predictions(
     Modality embeddings (0=vision, 1=audio, 2=text) are injected before
     self-attention so the Transformer can distinguish modality sources.
 
-    Returns dict with label + confidence, or None if no modality is present.
+    Returns dict with label, confidence, full 5-class probability distribution,
+    and relative modality attention contribution weights.
     """
-    assert _fusion_module is not None
+    if _fusion_module is None:
+        return None
 
     modality_names = []
     if vision_256 is not None:
@@ -554,21 +557,29 @@ def fuse_predictions(
         return None
 
     with torch.no_grad():
-        logits = _fusion_module.forward_modalities(
+        logits, mod_weights = _fusion_module.forward_modalities(
             vision_feat=vision_256,
             audio_feat=audio_256,
             text_feat=text_256,
+            return_weights=True,
         )
         if logits is None:
             return None
 
-        probs = F.softmax(logits, dim=-1)[0]
-        idx = int(probs.argmax())
+        probs = F.softmax(logits, dim=-1)[0].cpu().numpy()
+        idx = int(np.argmax(probs))
+
+        probs_dict = {
+            TARGET_EMOTIONS[i]: round(float(probs[i]), 4)
+            for i in range(len(TARGET_EMOTIONS))
+        }
 
         return {
-            "label": FUSION_ID2LABEL.get(idx, f"class_{idx}"),
+            "label": TARGET_EMOTIONS[idx],
             "confidence": round(float(probs[idx]), 4),
+            "probs": probs_dict,
             "modalities_used": modality_names,
+            "modality_weights": mod_weights,
         }
 
 
