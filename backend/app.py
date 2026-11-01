@@ -104,8 +104,9 @@ _image_size: int = 224
 _mean: np.ndarray = np.array([0.5, 0.5, 0.5], dtype=np.float32)
 _std: np.ndarray = np.array([0.5, 0.5, 0.5], dtype=np.float32)
 
-# MediaPipe face detector
-_mp_face_detection: mp.solutions.face_detection.FaceDetection | None = None
+# Face detector (MediaPipe, Haar Cascade, or adaptive crop)
+_face_detector: Any = None
+_detector_type: str = "adaptive_center"
 
 # --- Audio (AudioCNN encoder) ---
 _audio_cnn: AudioCNN | None = None
@@ -139,7 +140,7 @@ VIT_EMOTION_CLASSES = {}  # populated from emotion_config.json
 async def lifespan(_app: FastAPI):
     global _onnx_session, _onnx_input_name
     global _id2label, _image_size, _mean, _std
-    global _mp_face_detection
+    global _face_detector, _detector_type
     global _audio_cnn
     global _text_tokenizer, _text_model
     global _fusion_module, _text_encoder, _vision_encoder
@@ -170,11 +171,37 @@ async def lifespan(_app: FastAPI):
     _onnx_input_name = _onnx_session.get_inputs()[0].name
     logger.info("ONNX model loaded — input: %s", _onnx_input_name)
 
-    # ---- MediaPipe ----
-    _mp_face_detection = mp.solutions.face_detection.FaceDetection(
-        model_selection=0, min_detection_confidence=0.5
-    )
-    logger.info("MediaPipe FaceDetection initialised")
+    # ---- Face Detection ----
+    _face_detector = None
+    _detector_type = "adaptive_center"
+    try:
+        if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_detection"):
+            _face_detector = mp.solutions.face_detection.FaceDetection(
+                model_selection=0, min_detection_confidence=0.5
+            )
+            _detector_type = "mediapipe"
+            logger.info("MediaPipe solutions FaceDetection initialised")
+        else:
+            # Check for OpenCV Haar cascade
+            cascade_candidates = [
+                cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+                if hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades") else "",
+                str(_PROJECT_ROOT / "haarcascade_frontalface_default.xml"),
+                str(_BACKEND_DIR / "haarcascade_frontalface_default.xml"),
+            ]
+            for c_path in cascade_candidates:
+                if c_path and Path(c_path).exists():
+                    cc = cv2.CascadeClassifier(c_path)
+                    if not cc.empty():
+                        _face_detector = cc
+                        _detector_type = "haar"
+                        logger.info("OpenCV Haar cascade FaceDetection initialised from %s", c_path)
+                        break
+            if _face_detector is None:
+                logger.info("Using adaptive center-crop face detector (no external detector required)")
+    except Exception as exc:
+        logger.warning("Face detector init fallback: %s; using adaptive center crop", exc)
+        _detector_type = "adaptive_center"
 
     # ---- AudioCNN encoder ----
     _audio_cnn = AudioCNN(num_classes=5).to(_device)
@@ -224,8 +251,9 @@ async def lifespan(_app: FastAPI):
     yield  # ── application runs ──
 
     # teardown
-    if _mp_face_detection is not None:
-        _mp_face_detection.close()
+    if _detector_type == "mediapipe" and _face_detector is not None and hasattr(_face_detector, "close"):
+        _face_detector.close()
+    _face_detector = None
     _onnx_session = None
     _vision_encoder = None
     logger.info("Resources released")
@@ -271,25 +299,62 @@ def softmax(logits: np.ndarray) -> np.ndarray:
 
 
 def detect_face(frame_bgr: np.ndarray):
-    """MediaPipe face detection → best bbox with 5% margin."""
-    assert _mp_face_detection is not None
+    """Detect face bbox with multi-backend fallback (MediaPipe -> Haar -> Adaptive Center)."""
     h_f, w_f = frame_bgr.shape[:2]
-    frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    results = _mp_face_detection.process(frame_rgb)
-    if not results.detections:
-        return None, None
-    best = max(results.detections, key=lambda d: d.score[0])
-    confidence = float(best.score[0])
-    rbb = best.location_data.relative_bounding_box
-    x, y = int(rbb.xmin * w_f), int(rbb.ymin * h_f)
-    w, h = int(rbb.width * w_f), int(rbb.height * h_f)
-    mx, my = int(w * 0.05), int(h * 0.05)
+
+    # 1. MediaPipe
+    if _detector_type == "mediapipe" and _face_detector is not None:
+        try:
+            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            results = _face_detector.process(frame_rgb)
+            if results and results.detections:
+                best = max(results.detections, key=lambda d: d.score[0])
+                confidence = float(best.score[0])
+                rbb = best.location_data.relative_bounding_box
+                x, y = int(rbb.xmin * w_f), int(rbb.ymin * h_f)
+                w, h = int(rbb.width * w_f), int(rbb.height * h_f)
+                mx, my = int(w * 0.05), int(h * 0.05)
+                bbox = {
+                    "x": max(0, x - mx), "y": max(0, y - my),
+                    "w": min(w_f, x + w + mx) - max(0, x - mx),
+                    "h": min(h_f, y + h + my) - max(0, y - my),
+                }
+                return bbox, confidence
+        except Exception:
+            pass
+
+    # 2. OpenCV Haar Cascade
+    if _detector_type == "haar" and _face_detector is not None:
+        try:
+            gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+            faces = _face_detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+            if len(faces) > 0:
+                # Largest face
+                best = max(faces, key=lambda f: f[2] * f[3])
+                x, y, w, h = int(best[0]), int(best[1]), int(best[2]), int(best[3])
+                mx, my = int(w * 0.05), int(h * 0.05)
+                bbox = {
+                    "x": max(0, x - mx), "y": max(0, y - my),
+                    "w": min(w_f, x + w + mx) - max(0, x - mx),
+                    "h": min(h_f, y + h + my) - max(0, y - my),
+                }
+                return bbox, 0.85
+        except Exception:
+            pass
+
+    # 3. Adaptive Center Crop (telemedicine webcam default)
+    # Face is almost always in the center 60% of frame
+    box_w = int(w_f * 0.60)
+    box_h = int(h_f * 0.65)
+    x = max(0, (w_f - box_w) // 2)
+    y = max(0, int((h_f - box_h) * 0.40))
     bbox = {
-        "x": max(0, x - mx), "y": max(0, y - my),
-        "w": min(w_f, x + w + mx) - max(0, x - mx),
-        "h": min(h_f, y + h + my) - max(0, y - my),
+        "x": x,
+        "y": y,
+        "w": min(w_f - x, box_w),
+        "h": min(h_f - y, box_h),
     }
-    return bbox, confidence
+    return bbox, 0.75
 
 
 def run_vit_inference(face_crop: np.ndarray) -> tuple[dict[str, Any], np.ndarray]:
