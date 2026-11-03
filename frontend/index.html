@@ -424,6 +424,66 @@
     }
 
     /* ============================================================
+       TEXT EMOTION CHAT
+       ============================================================ */
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 100px;
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 2px;
+    }
+
+    .chat-message {
+      max-width: 88%;
+      padding: 10px 13px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .chat-message.user {
+      align-self: flex-end;
+      border-color: rgba(108, 138, 255, 0.25);
+      background: rgba(108, 138, 255, 0.12);
+      color: var(--text-primary);
+    }
+
+    .chat-message.assistant { align-self: flex-start; }
+    .chat-message.error { color: var(--accent-red); }
+
+    .chat-form {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .chat-input {
+      flex: 1;
+      min-width: 0;
+      min-height: 42px;
+      max-height: 120px;
+      resize: vertical;
+      padding: 11px 13px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      outline: none;
+      background: rgba(255, 255, 255, 0.035);
+      color: var(--text-primary);
+      font: 0.8rem var(--font-sans);
+    }
+
+    .chat-input:focus { border-color: rgba(108, 138, 255, 0.55); }
+    .chat-input::placeholder { color: var(--text-muted); }
+
+    /* ============================================================
        BUTTONS
        ============================================================ */
     .btn {
@@ -808,6 +868,22 @@
             </div>
           </div>
         </div>
+
+        <section class="glass-card chat-card animate-in delay-3" aria-labelledby="chatTitle">
+          <div class="card-header">
+            <h2 id="chatTitle">💬 Text Emotion Chat</h2>
+            <span class="card-badge">Backend analysis</span>
+          </div>
+          <div class="card-body">
+            <div class="chat-messages" id="chatMessages" role="log" aria-live="polite" aria-relevant="additions">
+              <div class="chat-message assistant">Type a message to analyze its emotion using the text modality.</div>
+            </div>
+            <form class="chat-form" id="chatForm">
+              <textarea class="chat-input" id="chatInput" rows="1" maxlength="1000" placeholder="Type a message…" aria-label="Message to analyze"></textarea>
+              <button class="btn btn-primary" id="chatSend" type="submit">Send</button>
+            </form>
+          </div>
+        </section>
       </section>
 
       <!-- --- Stats Sidebar --- -->
@@ -940,7 +1016,8 @@
     /* ==========================================================
        CONSTANTS & STATE
        ========================================================== */
-    const WS_URL = `ws://${location.host}/ws/multimodal`;
+    const WS_PROTOCOL = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const WS_URL = `${WS_PROTOCOL}//${location.host}/ws/multimodal`;
     const JPEG_QUALITY = 0.7;
     const RECONNECT_DELAY_MS = 2000;
     const MAX_RECONNECT_ATTEMPTS = 20;
@@ -974,6 +1051,8 @@
     let reconnectAttempts = 0;
     let awaitingResponse = false;
     let prevEmotion = null;
+    const chatQueue = [];
+    let inFlightChat = null;
 
     // Audio state
     let audioContext = null;
@@ -1016,6 +1095,9 @@
     const $distPanel    = document.getElementById('emotionDistribution');
     const $transcript   = document.getElementById('transcriptText');
     const $sttBadge     = document.getElementById('sttBadge');
+    const $chatForm     = document.getElementById('chatForm');
+    const $chatInput    = document.getElementById('chatInput');
+    const $chatMessages = document.getElementById('chatMessages');
     const $audioMeter   = document.getElementById('audioMeter');
     const $fusionBadge  = document.getElementById('fusionModeBadge');
     const $pillVideo    = document.getElementById('pillVideo');
@@ -1059,6 +1141,86 @@
     function setFaceBadge(detected) {
       $faceBadge.className = 'video-status-badge ' + (detected ? 'face-detected' : 'no-face');
       $faceBadgeT.textContent = detected ? 'Face Detected' : 'No Face Detected';
+    }
+
+    function appendChatMessage(text, role, isError = false) {
+      const message = document.createElement('div');
+      message.className = `chat-message ${role}${isError ? ' error' : ''}`;
+      message.textContent = text;
+      $chatMessages.appendChild(message);
+      $chatMessages.scrollTop = $chatMessages.scrollHeight;
+      return message;
+    }
+
+    function sendNextRequest() {
+      if (!ws || ws.readyState !== WebSocket.OPEN || awaitingResponse) return;
+
+      if (chatQueue.length > 0) {
+        inFlightChat = chatQueue.shift();
+        awaitingResponse = true;
+        try {
+          ws.send(JSON.stringify({ text: inFlightChat.text }));
+        } catch (error) {
+          awaitingResponse = false;
+          inFlightChat.reply.textContent = 'Could not send this message to the backend.';
+          inFlightChat.reply.classList.add('error');
+          inFlightChat = null;
+          console.error('Chat message send failed:', error);
+          sendNextRequest();
+        }
+        return;
+      }
+
+      if (running) sendNextFrame();
+    }
+
+    function submitChatMessage(event) {
+      event.preventDefault();
+      const text = $chatInput.value.trim();
+      if (!text) return;
+
+      appendChatMessage(text, 'user');
+      const reply = appendChatMessage('Waiting for backend analysis…', 'assistant');
+      chatQueue.push({ text, reply });
+      $chatInput.value = '';
+
+      if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
+        reconnectAttempts = 0;
+        connectWebSocket();
+      } else {
+        sendNextRequest();
+      }
+    }
+
+    function renderChatReply(data, request) {
+      if (data.error) {
+        request.reply.textContent = `Backend error: ${data.error}`;
+        request.reply.classList.add('error');
+        return;
+      }
+
+      const fusion = data.fusion_prediction;
+      if (fusion && fusion.label) {
+        const confidence = (fusion.confidence * 100).toFixed(1);
+        const modalities = (fusion.modalities_used || []).join(', ') || 'text';
+        request.reply.textContent = `Emotion: ${fusion.label} (${confidence}% confidence). Analyzed using ${modalities}.`;
+      } else {
+        request.reply.textContent = 'Text emotion analysis is unavailable. Check that the backend text model and fusion checkpoint loaded.';
+        request.reply.classList.add('error');
+      }
+    }
+
+    function failPendingChatMessages(reason) {
+      if (inFlightChat) {
+        inFlightChat.reply.textContent = reason;
+        inFlightChat.reply.classList.add('error');
+        inFlightChat = null;
+      }
+      while (chatQueue.length > 0) {
+        const request = chatQueue.shift();
+        request.reply.textContent = reason;
+        request.reply.classList.add('error');
+      }
     }
 
     /* ==========================================================
@@ -1444,18 +1606,32 @@
         reconnectAttempts = 0;
         setConnectionStatus('connected');
         awaitingResponse = false;
-        sendNextFrame();
+        sendNextRequest();
       };
 
       ws.onmessage = (evt) => {
+        let data;
         try {
-          const data = JSON.parse(evt.data);
-          handlePrediction(data);
+          data = JSON.parse(evt.data);
         } catch (e) {
           console.warn('Bad WS message', e);
+          if (inFlightChat) {
+            inFlightChat.reply.textContent = 'The backend returned an invalid response.';
+            inFlightChat.reply.classList.add('error');
+            inFlightChat = null;
+          }
+          awaitingResponse = false;
+          sendNextRequest();
+          return;
+        }
+
+        if (!inFlightChat || data.fusion_prediction) handlePrediction(data);
+        if (inFlightChat) {
+          renderChatReply(data, inFlightChat);
+          inFlightChat = null;
         }
         awaitingResponse = false;
-        if (running) sendNextFrame();
+        sendNextRequest();
       };
 
       ws.onerror = (err) => {
@@ -1464,10 +1640,18 @@
 
       ws.onclose = () => {
         setConnectionStatus('disconnected');
-        if (running && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        if (inFlightChat) {
+          chatQueue.unshift(inFlightChat);
+          inFlightChat = null;
+        }
+        awaitingResponse = false;
+        const hasPendingChats = chatQueue.length > 0;
+        if ((running || hasPendingChats) && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           reconnectAttempts++;
           setConnectionStatus('reconnecting');
           setTimeout(connectWebSocket, RECONNECT_DELAY_MS);
+        } else if (hasPendingChats) {
+          failPendingChatMessages('Connection lost before the backend replied. Please try again.');
         }
       };
     }
@@ -1478,6 +1662,10 @@
     function sendNextFrame() {
       if (!running || awaitingResponse) return;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (chatQueue.length > 0) {
+        sendNextRequest();
+        return;
+      }
       if (!$video.videoWidth) {
         requestAnimationFrame(sendNextFrame);
         return;
@@ -1665,7 +1853,7 @@
       $btnStart.disabled = false;
       $btnStop.disabled  = true;
 
-      if (ws) { ws.close(); ws = null; }
+      if (ws && !inFlightChat && chatQueue.length === 0) { ws.close(); ws = null; }
       stopMedia();
       stopSpeechRecognition();
       clearOverlay();
@@ -1681,6 +1869,13 @@
 
     $btnStart.addEventListener('click', startSession);
     $btnStop.addEventListener('click', stopSession);
+    $chatForm.addEventListener('submit', submitChatMessage);
+    $chatInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        $chatForm.requestSubmit();
+      }
+    });
   </script>
 </body>
 </html>

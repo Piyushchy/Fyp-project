@@ -28,16 +28,30 @@ angry · disgust · fear · happy · neutral · sad · surprise
 ### Refactored Multimodal Application (Core)
 
 ```bash
-# 1. Run the end-to-end tri-modal pipeline verification
+# Set up the environment once from the repository root
+python -m venv .venv
+# Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
+# macOS/Linux:
+# source .venv/bin/activate
+python -m pip install -r requirements.txt
+
+# Run the end-to-end tri-modal pipeline verification
 python main.py
 
-# 2. Launch the FastAPI WebSocket server
-uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+# Launch the FastAPI WebSocket server
+python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
 # Open http://localhost:8000/
 
-# 3. Train the multimodal fusion model
+# Train the multimodal fusion model
 python scripts/train_multimodal.py
 ```
+
+The first server launch downloads the pretrained ViT and BERT backbones from
+Hugging Face. The repository includes the trained multimodal fusion checkpoint.
+Open the server URL and use **Text Emotion Chat** to analyze typed messages
+without starting the camera session; chat requests use the existing multimodal
+WebSocket text encoder and fusion pipeline.
 
 ### Production Deployment Server (vit-emotion-v2-deployment)
 
