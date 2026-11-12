@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EmotionFusion — Video Call</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ============================================================
+       DESIGN TOKENS (shared with main dashboard)
+       ============================================================ */
+    :root {
+      --bg-primary: #06060b;
+      --bg-secondary: #0e0e16;
+      --bg-card: rgba(255, 255, 255, 0.035);
+      --border-subtle: rgba(255, 255, 255, 0.07);
+      --border-glow: rgba(255, 255, 255, 0.13);
+      --text-primary: #f0f0f5;
+      --text-secondary: #8b8b9e;
+      --text-muted: #55556a;
+      --accent-blue: #6c8aff;
+      --accent-purple: #a78bfa;
+      --accent-cyan: #22d3ee;
+      --accent-green: #34d399;
+      --accent-red: #f87171;
+      --accent-amber: #fbbf24;
+      --glass-bg: rgba(14, 14, 22, 0.72);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --glass-blur: 24px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.45);
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+      --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { font-size: 16px; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 15% 8%, rgba(108,138,255,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 85% 85%, rgba(167,139,250,0.05) 0%, transparent 60%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ============================================================
+       HEADER
+       ============================================================ */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--border-subtle);
+      backdrop-filter: blur(var(--glass-blur));
+      background: var(--glass-bg);
+      position: relative; z-index: 10;
+    }
+
+    .header-brand { display: flex; align-items: center; gap: 12px; }
+
+    .header-brand .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple), var(--accent-cyan));
+      border-radius: 8px; display: grid; place-items: center;
+      font-size: 17px;
+      box-shadow: 0 0 20px rgba(108,138,255,0.35);
+    }
+
+    .header-brand h1 {
+      font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--text-primary), var(--accent-blue));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    .header-brand .subtitle {
+      font-size: 0.65rem; color: var(--text-muted); font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+
+    /* ============================================================
+       JOIN PANEL
+       ============================================================ */
+    .join-panel {
+      display: flex; align-items: center; gap: 10px;
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(255,255,255,0.015);
+      position: relative; z-index: 5;
+    }
+
+    .join-panel label {
+      font-size: 0.78rem; font-weight: 600; color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .join-panel input[type="text"] {
+      flex: 1; max-width: 280px;
+      padding: 9px 14px; border-radius: 100px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255,255,255,0.04); color: var(--text-primary);
+      font: 0.82rem var(--font-mono); outline: none;
+    }
+    .join-panel input:focus { border-color: rgba(108,138,255,0.55); }
+
+    .role-select {
+      padding: 9px 14px;
+      border-radius: 100px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-primary);
+      font: 0.8rem var(--font-sans);
+      outline: none;
+      cursor: pointer;
+    }
+    .role-select:focus { border-color: rgba(108, 138, 255, 0.55); }
+    .role-select option { background: var(--bg-secondary); color: var(--text-primary); }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 22px; border-radius: 100px;
+      font-family: var(--font-sans); font-size: 0.78rem; font-weight: 600;
+      border: none; cursor: pointer; transition: all var(--transition-smooth);
+      letter-spacing: 0.01em; outline: none;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      color: #fff; box-shadow: 0 4px 20px rgba(108,138,255,0.25);
+    }
+    .btn-primary:hover { box-shadow: 0 6px 28px rgba(108,138,255,0.4); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .btn-danger {
+      background: rgba(248,113,113,0.15); color: var(--accent-red);
+      border: 1px solid rgba(248,113,113,0.2);
+    }
+    .btn-danger:hover { background: rgba(248,113,113,0.25); }
+
+    .btn-icon {
+      width: 42px; height: 42px; padding: 0;
+      border-radius: 50%; display: grid; place-items: center;
+      font-size: 1.1rem; background: var(--bg-card);
+      border: 1px solid var(--border-subtle); color: var(--text-primary);
+      cursor: pointer; transition: all var(--transition-smooth);
+    }
+    .btn-icon:hover { border-color: var(--border-glow); background: rgba(255,255,255,0.06); }
+    .btn-icon.muted { background: rgba(248,113,113,0.15); border-color: rgba(248,113,113,0.3); color: var(--accent-red); }
+
+    /* ============================================================
+       ENVIRONMENT CHECK OVERLAY (Task 1: Pre-Call Calibration)
+       ============================================================ */
+    .env-check-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      display: none; place-items: center;
+      background: rgba(6, 6, 11, 0.92);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+    .env-check-overlay.visible { display: grid; }
+
+    .env-check-card {
+      text-align: center;
+      padding: 40px 48px;
+      border-radius: var(--radius-lg);
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-card);
+      max-width: 380px; width: 90%;
+    }
+
+    .env-check-card .env-icon {
+      font-size: 3rem; margin-bottom: 12px;
+      animation: env-pulse 1.2s ease-in-out infinite alternate;
+    }
+    @keyframes env-pulse {
+      from { transform: scale(1); opacity: 0.85; }
+      to   { transform: scale(1.12); opacity: 1; }
+    }
+
+    .env-check-card h2 {
+      font-size: 1.1rem; font-weight: 700; margin-bottom: 6px;
+      color: var(--text-primary);
+    }
+
+    .env-check-card .env-subtitle {
+      font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 20px;
+    }
+
+    .env-progress-bar {
+      width: 100%; height: 6px;
+      border-radius: 100px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden; margin-bottom: 10px;
+    }
+
+    .env-progress-fill {
+      height: 100%; width: 0%;
+      border-radius: 100px;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+      transition: width 0.5s linear;
+    }
+
+    .env-countdown {
+      font-size: 0.72rem; font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+
+    .env-listening-dots {
+      display: flex; gap: 6px; justify-content: center; margin-top: 14px;
+    }
+    .env-listening-dots span {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent-cyan);
+      animation: env-dot-bounce 0.8s ease-in-out infinite;
+    }
+    .env-listening-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .env-listening-dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes env-dot-bounce {
+      0%, 100% { opacity: 0.3; transform: translateY(0); }
+      50%      { opacity: 1;   transform: translateY(-5px); }
+    }
+
+    .status-pill {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 14px; border-radius: 100px;
+      font-size: 0.72rem; font-weight: 600;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+    }
+
+    .status-pill .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent-amber);
+    }
+    .status-pill.connected .dot { background: var(--accent-green); animation: pulse-dot 2s ease-in-out infinite; }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* ============================================================
+       VIDEO & TELEMETRY GRID
+       ============================================================ */
+    .video-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 300px 1.2fr 380px;
+      gap: 20px;
+      padding: 20px 28px;
+      position: relative; z-index: 1;
+      align-items: stretch;
+    }
+
+    @media (max-width: 1200px) {
+      .video-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .doctor-dashboard-card {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .video-grid { grid-template-columns: 1fr; }
+    }
+
+    .video-tile {
+      position: relative;
+      aspect-ratio: 4 / 3;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-subtle);
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+      transition: border-color var(--transition-smooth);
+    }
+    .video-tile:hover { border-color: var(--border-glow); }
+
+    .video-tile video {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+    }
+
+    .video-tile .tile-label {
+      position: absolute; bottom: 12px; left: 12px;
+      padding: 5px 14px; border-radius: 100px;
+      font-size: 0.72rem; font-weight: 600;
+      backdrop-filter: blur(16px);
+      background: rgba(15,23,42,0.75);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: var(--text-primary); z-index: 5;
+    }
+
+    .video-placeholder {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; color: var(--text-muted);
+    }
+
+    .video-placeholder .ph-icon {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: var(--bg-card); border: 2px dashed var(--border-subtle);
+      display: grid; place-items: center; font-size: 24px;
+    }
+
+    .video-placeholder p { font-size: 0.82rem; font-weight: 500; }
+
+    /* ============================================================
+       DOCTOR TELEMETRY DASHBOARD CARD
+       ============================================================ */
+    .doctor-dashboard-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      backdrop-filter: blur(var(--glass-blur));
+      -webkit-backdrop-filter: blur(var(--glass-blur));
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 420px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .card-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title-group h2 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-primary);
+    }
+
+    .telemetry-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 10px var(--accent-cyan);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    .card-badge {
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 100px;
+      background: rgba(108, 138, 255, 0.1);
+      color: var(--accent-blue);
+      border: 1px solid rgba(108, 138, 255, 0.2);
+    }
+
+    .card-badge.status-live {
+      background: rgba(52, 211, 153, 0.15);
+      color: var(--accent-green);
+      border-color: rgba(52, 211, 153, 0.3);
+    }
+
+    .card-badge.status-connecting {
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--accent-amber);
+      border-color: rgba(251, 191, 36, 0.3);
+    }
+
+    .card-badge.status-disconnected, .card-badge.status-error {
+      background: rgba(248, 113, 113, 0.15);
+      color: var(--accent-red);
+      border-color: rgba(248, 113, 113, 0.3);
+    }
+
+    .card-body {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1;
+    }
+
+    .dominant-emotion-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+    }
+
+    .dominant-emoji {
+      font-size: 2.2rem;
+      line-height: 1;
+    }
+
+    .dominant-info {
+      flex: 1;
+    }
+
+    .dominant-label {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .dominant-conf {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .dominant-pill {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border-radius: 100px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-secondary);
+    }
+
+    .chart-wrapper {
+      position: relative;
+      flex: 1;
+      min-height: 200px;
+      width: 100%;
+    }
+
+    .telemetry-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 12px;
+    }
+
+    .modality-badges {
+      display: flex;
+      gap: 8px;
+    }
+
+    .mod-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 100px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid var(--border-subtle);
+      transition: all var(--transition-smooth);
+    }
+
+    .mod-pill.active {
+      color: var(--accent-cyan);
+      border-color: rgba(34, 211, 238, 0.3);
+      background: rgba(34, 211, 238, 0.1);
+    }
+
+    .mod-pill .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .patient-transcript-box {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      font-size: 0.75rem;
+    }
+
+    .transcript-tag {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .transcript-quote {
+      color: var(--text-secondary);
+      font-style: italic;
+      line-height: 1.4;
+      max-height: 48px;
+      overflow-y: auto;
+    }
+
+    /* ============================================================
+       CONTROLS BAR
+       ============================================================ */
+    .controls-bar {
+      display: flex; align-items: center; justify-content: center;
+      gap: 14px;
+      padding: 16px 28px;
+      border-top: 1px solid var(--border-subtle);
+      background: var(--glass-bg);
+      backdrop-filter: blur(var(--glass-blur));
+      position: relative; z-index: 10;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ====== ENVIRONMENT CHECK OVERLAY (Task 1: Pre-Call Calibration) ====== -->
+  <div class="env-check-overlay" id="envCheckOverlay">
+    <div class="env-check-card">
+      <div class="env-icon">🎤</div>
+      <h2>Environment Check</h2>
+      <p class="env-subtitle">Calibrating ambient noise level for optimal emotion detection…</p>
+      <div class="env-progress-bar">
+        <div class="env-progress-fill" id="envProgressFill"></div>
+      </div>
+      <div class="env-countdown" id="envCountdown">5s remaining</div>
+      <div class="env-listening-dots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== HEADER ====== -->
+  <header class="header">
+    <div class="header-brand">
+      <div class="logo-icon">📹</div>
+      <div>
+        <h1>EmotionFusion Call</h1>
+        <span class="subtitle">Telemedicine · P2P Video</span>
+      </div>
+    </div>
+    <div class="status-pill" id="statusPill">
+      <span class="dot"></span>
+      <span id="callStatus">Ready</span>
+    </div>
+  </header>
+
+  <!-- ====== JOIN ====== -->
+  <div class="join-panel">
+    <label for="roomInput">Room ID:</label>
+    <input type="text" id="roomInput" placeholder="room1" value="room1" />
+    <label for="roleSelect" style="margin-left: 8px;">Role:</label>
+    <select id="roleSelect" class="role-select">
+      <option value="doctor" selected>👨‍⚕️ Doctor (Telemetry View)</option>
+      <option value="patient">🧑‍💼 Patient (Multimodal Send)</option>
+    </select>
+    <button class="btn btn-primary" id="btnJoin">📞 Join Call</button>
+    <button class="btn btn-danger" id="btnLeave" disabled>✕ Leave</button>
+  </div>
+
+  <!-- ====== VIDEO & TELEMETRY GRID ====== -->
+  <div class="video-grid">
+    <!-- Local Camera -->
+    <div class="video-tile">
+      <video id="localVideo" muted autoplay playsinline></video>
+      <div class="video-placeholder" id="localPlaceholder">
+        <div class="ph-icon">🙂</div>
+        <p>Your camera</p>
+      </div>
+      <span class="tile-label">You</span>
+    </div>
+
+    <!-- Remote Peer Feed -->
+    <div class="video-tile">
+      <video id="remoteVideo" autoplay playsinline></video>
+      <div class="video-placeholder" id="remotePlaceholder">
+        <div class="ph-icon">👤</div>
+        <p>Waiting for peer…</p>
+      </div>
+      <span class="tile-label" id="remoteTileLabel">Remote Peer</span>
+    </div>
+
+    <!-- Doctor Emotion Telemetry Dashboard (Dynamic Chart.js Bar Chart cleanly placed next to remoteVideo) -->
+    <div class="doctor-dashboard-card glass-card" id="doctorDashboard">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="telemetry-dot"></span>
+          <h2>Patient Emotion Telemetry</h2>
+        </div>
+        <span class="card-badge" id="telemetryStatusBadge">Connecting…</span>
+      </div>
+
+      <div class="card-body">
+        <!-- Dominant Emotion Quick Summary -->
+        <div class="dominant-emotion-banner">
+          <div class="dominant-emoji" id="dominantEmoji">🔍</div>
+          <div class="dominant-info">
+            <div class="dominant-label" id="dominantEmotionName">Awaiting Telemetry</div>
+            <div class="dominant-conf" id="dominantConfidence">Listening on room1…</div>
+          </div>
+          <div class="dominant-pill" id="dominantPill">—</div>
+        </div>
+
+        <!-- Dynamic Chart.js Bar Chart -->
+        <div class="chart-wrapper">
+          <canvas id="emotionChart"></canvas>
+        </div>
+
+        <!-- Modality Indicators & Live Patient Transcript -->
+        <div class="telemetry-meta">
+          <div class="modality-badges">
+            <span class="mod-pill" id="modVisionBadge"><span class="dot"></span> Vision</span>
+            <span class="mod-pill" id="modAudioBadge"><span class="dot"></span> Audio</span>
+            <span class="mod-pill" id="modTextBadge"><span class="dot"></span> Text</span>
+          </div>
+          <div class="patient-transcript-box">
+            <span class="transcript-tag">Patient Transcript:</span>
+            <p class="transcript-quote" id="doctorTranscriptText">Speech will appear here as the patient speaks…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== CONTROLS ====== -->
+  <div class="controls-bar">
+    <button class="btn-icon" id="btnToggleMic" title="Toggle microphone">🎤</button>
+    <button class="btn-icon" id="btnToggleCam" title="Toggle camera">📷</button>
+  </div>
+
+  <!-- ====== SCRIPTS ====== -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/simple-peer@9/simplepeer.min.js"></script>
+  <script src="/static/webrtc.js"></script>
+  <script src="/static/patient.js"></script>
+  <script src="/static/doctor.js"></script>
+  <script>
+    /* ── DOM refs ── */
+    const $roomInput  = document.getElementById('roomInput');
+    const $roleSelect = document.getElementById('roleSelect');
+    const $btnJoin    = document.getElementById('btnJoin');
+    const $btnLeave   = document.getElementById('btnLeave');
+    const $btnMic     = document.getElementById('btnToggleMic');
+    const $btnCam     = document.getElementById('btnToggleCam');
+    const $localPH    = document.getElementById('localPlaceholder');
+    const $remotePH   = document.getElementById('remotePlaceholder');
+    const $statusPill = document.getElementById('statusPill');
+    const $doctorDash = document.getElementById('doctorDashboard');
+
+    // Parse URL query params if role or room pre-specified (?role=doctor&room=room1)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('room')) $roomInput.value = urlParams.get('room');
+    if (urlParams.get('role')) $roleSelect.value = urlParams.get('role');
+
+    /* ── Observe video elements for placeholder hiding ── */
+    const localVid  = document.getElementById('localVideo');
+    const remoteVid = document.getElementById('remoteVideo');
+
+    function watchStream(videoEl, placeholder) {
+      setInterval(() => {
+        const active = videoEl.srcObject && videoEl.srcObject.active;
+        placeholder.style.display = active ? 'none' : '';
+        if (active) $statusPill.classList.add('connected');
+      }, 500);
+    }
+    watchStream(localVid, $localPH);
+    watchStream(remoteVid, $remotePH);
+
+    /* ── Join / Leave ── */
+    $btnJoin.addEventListener('click', async () => {
+      const room = $roomInput.value.trim() || 'room1';
+      const role = $roleSelect.value;
+      $roomInput.value = room;
+      $btnJoin.disabled = true;
+      $btnLeave.disabled = false;
+
+      // Branch behavior based on telemedicine role
+      if (role === 'doctor') {
+        // Start P2P WebRTC call immediately for doctor
+        await joinCall(room);
+        if ($doctorDash) $doctorDash.style.display = '';
+        if (window.DoctorDashboard) {
+          const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          window.DoctorDashboard.start(`${wsProto}//${location.host}/ws/multimodal/doctor/${room}`);
+        }
+      } else {
+        // Patient role: run 5-second environment check BEFORE connecting
+        if ($doctorDash) $doctorDash.style.display = 'none';
+
+        // Request media early so we can calibrate the mic
+        let localStream = null;
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          localVid.srcObject = localStream;
+        } catch (mediaErr) {
+          console.warn('[Call] getUserMedia failed, proceeding without calibration:', mediaErr);
+        }
+
+        // Show calibration overlay
+        const overlay = document.getElementById('envCheckOverlay');
+        const progressFill = document.getElementById('envProgressFill');
+        const countdown = document.getElementById('envCountdown');
+        overlay.classList.add('visible');
+
+        // Animate the progress bar over 5 seconds
+        let remaining = 5;
+        progressFill.style.width = '0%';
+        const tickInterval = setInterval(() => {
+          remaining--;
+          if (remaining >= 0) {
+            progressFill.style.width = ((5 - remaining) / 5 * 100) + '%';
+            countdown.textContent = remaining + 's remaining';
+          }
+        }, 1000);
+
+        // Run noise floor calibration (5 seconds)
+        if (localStream && window.PatientMLExtractor && window.PatientMLExtractor.calibrateNoiseFloor) {
+          try {
+            await window.PatientMLExtractor.calibrateNoiseFloor(localStream);
+          } catch (calErr) {
+            console.warn('[Call] Noise calibration error:', calErr);
+          }
+        } else {
+          // No stream or extractor — just wait the 5s for UX consistency
+          await new Promise(r => setTimeout(r, 5000));
+        }
+
+        clearInterval(tickInterval);
+        progressFill.style.width = '100%';
+        countdown.textContent = 'Done!';
+
+        // Brief pause before hiding overlay
+        await new Promise(r => setTimeout(r, 400));
+        overlay.classList.remove('visible');
+
+        // NOW start the WebRTC call and ML extraction
+        await joinCall(room);
+
+        if (window.PatientMLExtractor) {
+          const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          window.PatientMLExtractor.start({
+            wsUrl: `${wsProto}//${location.host}/ws/multimodal/patient/${room}`,
+            stream: localVid.srcObject
+          });
+        }
+      }
+    });
+
+    $btnLeave.addEventListener('click', () => {
+      leaveCall();
+      if (window.PatientMLExtractor && window.PatientMLExtractor.isRunning) {
+        window.PatientMLExtractor.stop();
+      }
+      if (window.DoctorDashboard && window.DoctorDashboard.isRunning) {
+        window.DoctorDashboard.stop();
+      }
+      $btnJoin.disabled = false;
+      $btnLeave.disabled = true;
+      $statusPill.classList.remove('connected');
+    });
+
+    /* ── Mic / Cam toggles ── */
+    $btnMic.addEventListener('click', () => {
+      const on = toggleAudio();
+      $btnMic.classList.toggle('muted', !on);
+      $btnMic.textContent = on ? '🎤' : '🔇';
+    });
+
+    $btnCam.addEventListener('click', () => {
+      const on = toggleVideo();
+      $btnCam.classList.toggle('muted', !on);
+      $btnCam.textContent = on ? '📷' : '🚫';
+    });
+  </script>
+</body>
+</html>
+
