@@ -538,18 +538,137 @@
       return;
     }
 
-    // Deduplicate consecutive identical transcripts
-    const unique = [];
-    let prevText = '';
+    // Helper: Normalize text for matching (case-insensitive, strip punctuation/extra spaces)
+    const cleanText = (str) =>
+      (str || '')
+        .toLowerCase()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?!]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    // Helper: Split text into candidate sentences before punctuation marks or pauses
+    const splitIntoSentences = (text) => {
+      if (!text || !text.trim()) return [];
+      // Protect common honorifics/abbreviations before splitting
+      const protectedText = text.replace(/(?<=\b(?:Dr|Mr|Mrs|Ms|Prof|Sr|Jr))\./gi, '@@DOT@@');
+      const matches = protectedText.match(/(?:[^.!?]|\d\.\d)+[.!?]*(?:\s+|$)/g);
+      if (!matches) return [text.trim()];
+      return matches
+        .map((s) => s.replace(/@@DOT@@/g, '.').trim())
+        .filter((s) => s.length > 0);
+    };
+
+    // Helper: Calculate dominant emotion (mode of labels collected while sentence was active)
+    const getModeEmotion = (labels) => {
+      if (!labels || labels.length === 0) return 'neutral';
+      const counts = {};
+      for (const raw of labels) {
+        if (!raw) continue;
+        const norm = String(raw).toLowerCase().trim();
+        if (!norm) continue;
+        counts[norm] = (counts[norm] || 0) + 1;
+      }
+
+      let dominant = 'neutral';
+      let maxCount = 0;
+      for (const [label, count] of Object.entries(counts)) {
+        if (count > maxCount) {
+          maxCount = count;
+          dominant = label;
+        } else if (count === maxCount && dominant === 'neutral') {
+          dominant = label;
+        }
+      }
+      return dominant;
+    };
+
+    // Sentence-Extraction Parser iterating through sessionLog
+    const PAUSE_THRESHOLD_MS = 3500;
+    const extracted = []; // array of { text, labels: [], lastTimestamp, hasPunctuation, isClosed }
+    let prevTimestamp = 0;
+
     for (let i = 0; i < sessionLog.length; i++) {
       const entry = sessionLog[i];
-      if (entry && entry.text && entry.text.trim() && entry.text.trim() !== prevText) {
-        unique.push(entry);
-        prevText = entry.text.trim();
+      if (!entry || !entry.text || !entry.text.trim()) continue;
+
+      const entryTime = entry.timestamp || 0;
+      const isPause = prevTimestamp > 0 && entryTime - prevTimestamp > PAUSE_THRESHOLD_MS;
+      prevTimestamp = entryTime;
+
+      // When a pause is detected, finalize the preceding active sentence
+      if (isPause && extracted.length > 0) {
+        extracted[extracted.length - 1].isClosed = true;
+      }
+
+      const clauses = splitIntoSentences(entry.text);
+      if (clauses.length === 0) continue;
+
+      for (let cIdx = 0; cIdx < clauses.length; cIdx++) {
+        const clause = clauses[cIdx];
+        const normClause = cleanText(clause);
+        if (!normClause) continue;
+
+        const endsWithPunct = /[.!?]$/.test(clause.trim());
+        const isLastClauseInEntry = cIdx === clauses.length - 1;
+
+        // Search recent sentences in rolling window (up to last 4 items)
+        let matchIdx = -1;
+        const searchStart = Math.max(0, extracted.length - 4);
+
+        for (let j = extracted.length - 1; j >= searchStart; j--) {
+          const item = extracted[j];
+          const normExisting = cleanText(item.text);
+
+          // Exact match
+          if (normExisting === normClause) {
+            matchIdx = j;
+            break;
+          }
+
+          // If existing sentence is not yet closed/completed, check for prefix expansion
+          if (!item.isClosed && !item.hasPunctuation) {
+            if (normClause.startsWith(normExisting) || normExisting.startsWith(normClause)) {
+              matchIdx = j;
+              break;
+            }
+          }
+        }
+
+        if (matchIdx !== -1) {
+          const matched = extracted[matchIdx];
+          const normExisting = cleanText(matched.text);
+
+          let wasExtended = false;
+          // Retain only the longest/most complete string of text before a pause or punctuation mark
+          if (clause.length > matched.text.length && normClause.startsWith(normExisting)) {
+            matched.text = clause;
+            matched.hasPunctuation = endsWithPunct;
+            wasExtended = true;
+          } else if (endsWithPunct && !matched.hasPunctuation) {
+            matched.text = clause;
+            matched.hasPunctuation = true;
+            wasExtended = true;
+          }
+
+          // Sentence was active during this log entry if it was extended or is the latest spoken clause
+          if (entry.label && (wasExtended || isLastClauseInEntry)) {
+            matched.labels.push(entry.label);
+          }
+          matched.lastTimestamp = entryTime;
+        } else {
+          // New unique sentence
+          extracted.push({
+            text: clause,
+            labels: entry.label ? [entry.label] : [],
+            lastTimestamp: entryTime,
+            hasPunctuation: endsWithPunct,
+            isClosed: endsWithPunct,
+          });
+        }
       }
     }
 
-    if (unique.length === 0) {
+    if (extracted.length === 0) {
       $container.innerHTML =
         '<div class="h-full flex flex-col items-center justify-center text-gray-500 gap-2">' +
         '<span class="text-3xl">📝</span>' +
@@ -558,41 +677,41 @@
       return;
     }
 
-    // Generate HTML string of <span class="gre-sentence"> tags by parsing sessionLog array
-    let htmlString = '<p class="text-sm leading-relaxed text-gray-300 space-x-1.5">';
-    for (let idx = 0; idx < unique.length; idx++) {
-      const entry = unique[idx];
-      const normLabel = (entry.label || 'neutral').toLowerCase();
-      const style = TAILWIND_EMOTION_STYLES[normLabel] || {
-        tagBg: 'bg-gray-700 text-gray-300 border-gray-600',
-      };
-      htmlString += `<span class="gre-sentence cursor-pointer px-2 py-0.5 rounded transition-all duration-150 inline-block hover:bg-gray-700/60 border border-transparent" data-emotion="${normLabel}" data-index="${idx}">${entry.text}<span class="gre-emotion-tag hidden ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${style.tagBg}">${normLabel}</span></span> `;
+    // Generate HTML string of <span class="gre-sentence"> elements
+    let htmlString = '<p class="text-sm leading-relaxed text-gray-300">';
+    for (let idx = 0; idx < extracted.length; idx++) {
+      const item = extracted[idx];
+      const sentence = item.text;
+      const dominantEmotion = getModeEmotion(item.labels);
+      htmlString += `<span class="gre-sentence p-1 rounded cursor-pointer transition-colors duration-200" data-emotion="${dominantEmotion}">${sentence}</span> `;
     }
     htmlString += '</p>';
 
-    // Append/set HTML string to interactiveTranscript.innerHTML
+    // Append finalized HTML string to interactiveTranscript.innerHTML
     $container.innerHTML = htmlString;
 
-    // Attach click listeners for interactive sentiment highlighting
+    // Attach click listeners for Tailwind emotion sentiment highlights
+    const HIGHLIGHT_STYLES = {
+      happy: ['bg-yellow-900/70', 'text-yellow-200', 'ring-1', 'ring-yellow-500/40'],
+      sad: ['bg-blue-900/70', 'text-blue-200', 'ring-1', 'ring-blue-500/40'],
+      angry: ['bg-red-900/70', 'text-red-200', 'ring-1', 'ring-red-500/40'],
+      fear: ['bg-purple-900/70', 'text-purple-200', 'ring-1', 'ring-purple-500/40'],
+      surprise: ['bg-emerald-900/70', 'text-emerald-200', 'ring-1', 'ring-emerald-500/40'],
+      neutral: ['bg-gray-800', 'text-gray-200', 'ring-1', 'ring-gray-600'],
+    };
+
     $container.querySelectorAll('.gre-sentence').forEach((span) => {
       span.addEventListener('click', () => {
-        const normLabel = span.getAttribute('data-emotion') || 'neutral';
-        const style = TAILWIND_EMOTION_STYLES[normLabel] || {
-          bg: 'bg-gray-800',
-          text: 'text-gray-200',
-          border: 'border-gray-600',
-        };
-        const tag = span.querySelector('.gre-emotion-tag');
+        const emotion = (span.getAttribute('data-emotion') || 'neutral').toLowerCase();
+        const classes = HIGHLIGHT_STYLES[emotion] || HIGHLIGHT_STYLES.neutral;
         const isHighlighted = span.classList.contains('is-highlighted');
 
         if (isHighlighted) {
-          span.classList.remove('is-highlighted', style.bg, style.text, style.border);
-          span.classList.add('border-transparent', 'hover:bg-gray-700/60');
-          if (tag) tag.classList.add('hidden');
+          span.classList.remove('is-highlighted', ...classes);
+          span.removeAttribute('title');
         } else {
-          span.classList.add('is-highlighted', style.bg, style.text, style.border);
-          span.classList.remove('border-transparent', 'hover:bg-gray-700/60');
-          if (tag) tag.classList.remove('hidden');
+          span.classList.add('is-highlighted', ...classes);
+          span.setAttribute('title', `Dominant emotion: ${emotion.toUpperCase()}`);
         }
       });
     });
