@@ -1,13 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Real-time multimodal emotion recognition dashboard — fusing Video, Audio, and Speech-to-Text through a Transformer fusion model." />
+  <meta name="description"
+    content="Real-time multimodal emotion recognition dashboard — fusing Video, Audio, and Speech-to-Text through a Transformer fusion model." />
   <title>EmotionFusion — Multimodal Emotion Recognition</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
   <style>
     /* ============================================================
        DESIGN TOKENS
@@ -56,8 +60,17 @@
     /* ============================================================
        RESET & BASE
        ============================================================ */
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html { font-size: 16px; }
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      font-size: 16px;
+    }
 
     body {
       font-family: var(--font-sans);
@@ -127,8 +140,15 @@
     }
 
     @keyframes logo-shimmer {
-      0%, 100% { box-shadow: 0 0 24px rgba(108, 138, 255, 0.35); }
-      50% { box-shadow: 0 0 32px rgba(167, 139, 250, 0.45); }
+
+      0%,
+      100% {
+        box-shadow: 0 0 24px rgba(108, 138, 255, 0.35);
+      }
+
+      50% {
+        box-shadow: 0 0 32px rgba(167, 139, 250, 0.45);
+      }
     }
 
     .header-brand h1 {
@@ -149,7 +169,11 @@
       letter-spacing: 0.1em;
     }
 
-    .header-controls { display: flex; align-items: center; gap: 10px; }
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
 
     /* Modality indicator pills in header */
     .modality-indicators {
@@ -220,7 +244,9 @@
       transition: border-color var(--transition-smooth);
     }
 
-    .glass-card:hover { border-color: var(--border-glow); }
+    .glass-card:hover {
+      border-color: var(--border-glow);
+    }
 
     .card-header {
       display: flex;
@@ -248,7 +274,9 @@
       border: 1px solid rgba(108, 138, 255, 0.15);
     }
 
-    .card-body { padding: 20px; }
+    .card-body {
+      padding: 20px;
+    }
 
     /* ============================================================
        VIDEO VIEWPORT
@@ -280,8 +308,10 @@
 
     .video-viewport .overlay-canvas {
       position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       pointer-events: none;
       transform: scaleX(-1);
     }
@@ -289,7 +319,8 @@
     /* Badges on video */
     .video-status-badge {
       position: absolute;
-      top: 14px; left: 14px;
+      top: 14px;
+      left: 14px;
       display: flex;
       align-items: center;
       gap: 7px;
@@ -317,20 +348,31 @@
     }
 
     .video-status-badge .dot {
-      width: 7px; height: 7px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       background: currentColor;
       animation: pulse-dot 2s ease-in-out infinite;
     }
 
     @keyframes pulse-dot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.85); }
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.5;
+        transform: scale(0.85);
+      }
     }
 
     .video-fps-badge {
       position: absolute;
-      top: 14px; right: 14px;
+      top: 14px;
+      right: 14px;
       padding: 5px 12px;
       border-radius: 100px;
       font-family: var(--font-mono);
@@ -346,7 +388,8 @@
 
     .video-emotion-label {
       position: absolute;
-      bottom: 16px; left: 50%;
+      bottom: 16px;
+      left: 50%;
       transform: translateX(-50%);
       padding: 9px 24px;
       border-radius: 100px;
@@ -362,10 +405,13 @@
       white-space: nowrap;
     }
 
-    .video-emotion-label .emoji { margin-right: 6px; }
+    .video-emotion-label .emoji {
+      margin-right: 6px;
+    }
 
     .video-placeholder {
-      position: absolute; inset: 0;
+      position: absolute;
+      inset: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -376,7 +422,8 @@
     }
 
     .video-placeholder .placeholder-icon {
-      width: 64px; height: 64px;
+      width: 64px;
+      height: 64px;
       border-radius: 50%;
       background: var(--bg-card);
       border: 2px dashed var(--border-subtle);
@@ -385,8 +432,14 @@
       font-size: 28px;
     }
 
-    .video-placeholder p { font-size: 0.85rem; font-weight: 500; }
-    .video-placeholder.hidden { display: none; }
+    .video-placeholder p {
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .video-placeholder.hidden {
+      display: none;
+    }
 
     /* ============================================================
        TRANSCRIPT PANEL (below video)
@@ -415,7 +468,9 @@
     }
 
     @keyframes blink-cursor {
-      50% { opacity: 0; }
+      50% {
+        opacity: 0;
+      }
     }
 
     .transcript-interim {
@@ -455,8 +510,13 @@
       color: var(--text-primary);
     }
 
-    .chat-message.assistant { align-self: flex-start; }
-    .chat-message.error { color: var(--accent-red); }
+    .chat-message.assistant {
+      align-self: flex-start;
+    }
+
+    .chat-message.error {
+      color: var(--accent-red);
+    }
 
     .chat-form {
       display: flex;
@@ -480,8 +540,13 @@
       font: 0.8rem var(--font-sans);
     }
 
-    .chat-input:focus { border-color: rgba(108, 138, 255, 0.55); }
-    .chat-input::placeholder { color: var(--text-muted); }
+    .chat-input:focus {
+      border-color: rgba(108, 138, 255, 0.55);
+    }
+
+    .chat-input::placeholder {
+      color: var(--text-muted);
+    }
 
     /* ============================================================
        BUTTONS
@@ -502,17 +567,21 @@
       outline: none;
     }
 
-    .btn:active { transform: scale(0.97); }
+    .btn:active {
+      transform: scale(0.97);
+    }
 
     .btn-primary {
       background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
       color: #fff;
       box-shadow: 0 4px 20px rgba(108, 138, 255, 0.25);
     }
+
     .btn-primary:hover {
       box-shadow: 0 6px 28px rgba(108, 138, 255, 0.4);
       transform: translateY(-1px);
     }
+
     .btn-primary:disabled {
       opacity: 0.4;
       cursor: not-allowed;
@@ -525,7 +594,10 @@
       color: var(--accent-red);
       border: 1px solid rgba(248, 113, 113, 0.2);
     }
-    .btn-danger:hover { background: rgba(248, 113, 113, 0.25); }
+
+    .btn-danger:hover {
+      background: rgba(248, 113, 113, 0.25);
+    }
 
     /* ============================================================
        STATS PANEL
@@ -552,11 +624,13 @@
       border: 1px solid rgba(16, 185, 129, 0.25);
       color: #047857;
     }
+
     .connection-status.disconnected {
       background: rgba(239, 68, 68, 0.1);
       border: 1px solid rgba(239, 68, 68, 0.25);
       color: #b91c1c;
     }
+
     .connection-status.reconnecting {
       background: rgba(245, 158, 11, 0.1);
       border: 1px solid rgba(245, 158, 11, 0.25);
@@ -564,13 +638,20 @@
     }
 
     .connection-status .status-dot {
-      width: 9px; height: 9px;
+      width: 9px;
+      height: 9px;
       border-radius: 50%;
       background: currentColor;
       flex-shrink: 0;
     }
-    .connection-status.connected .status-dot { animation: pulse-dot 2s ease-in-out infinite; }
-    .connection-status.reconnecting .status-dot { animation: pulse-dot 0.8s ease-in-out infinite; }
+
+    .connection-status.connected .status-dot {
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    .connection-status.reconnecting .status-dot {
+      animation: pulse-dot 0.8s ease-in-out infinite;
+    }
 
     .stat-item {
       display: flex;
@@ -614,7 +695,10 @@
       line-height: 1;
       transition: transform var(--transition-spring);
     }
-    .emotion-emoji.pop { transform: scale(1.18); }
+
+    .emotion-emoji.pop {
+      transform: scale(1.18);
+    }
 
     .emotion-name {
       font-size: 1.05rem;
@@ -633,9 +717,9 @@
     }
 
     .tag-fusion {
-      background: linear-gradient(135deg, rgba(108,138,255,0.15), rgba(167,139,250,0.15));
+      background: linear-gradient(135deg, rgba(108, 138, 255, 0.15), rgba(167, 139, 250, 0.15));
       color: var(--accent-purple);
-      border: 1px solid rgba(167,139,250,0.2);
+      border: 1px solid rgba(167, 139, 250, 0.2);
     }
 
     .tag-vision {
@@ -697,9 +781,17 @@
     }
 
     /* --- Distribution --- */
-    .emotion-history { display: flex; flex-direction: column; gap: 8px; }
+    .emotion-history {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
 
-    .emotion-history-bar { display: flex; align-items: center; gap: 8px; }
+    .emotion-history-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
     .emotion-history-bar .eh-label {
       width: 65px;
@@ -737,14 +829,37 @@
     }
 
     /* Emotion-specific colours */
-    .emo-angry    { --emo-color: #f87171; }
-    .emo-disgust  { --emo-color: #a78bfa; }
-    .emo-fear     { --emo-color: #c084fc; }
-    .emo-happy    { --emo-color: #fbbf24; }
-    .emo-neutral  { --emo-color: #94a3b8; }
-    .emo-sad      { --emo-color: #60a5fa; }
-    .emo-surprise { --emo-color: #34d399; }
-    .emotion-history-bar .eh-fill { background: var(--emo-color); }
+    .emo-angry {
+      --emo-color: #f87171;
+    }
+
+    .emo-disgust {
+      --emo-color: #a78bfa;
+    }
+
+    .emo-fear {
+      --emo-color: #c084fc;
+    }
+
+    .emo-happy {
+      --emo-color: #fbbf24;
+    }
+
+    .emo-neutral {
+      --emo-color: #94a3b8;
+    }
+
+    .emo-sad {
+      --emo-color: #60a5fa;
+    }
+
+    .emo-surprise {
+      --emo-color: #34d399;
+    }
+
+    .emotion-history-bar .eh-fill {
+      background: var(--emo-color);
+    }
 
     /* --- Audio level meter --- */
     .audio-meter-wrapper {
@@ -781,30 +896,68 @@
     /* ============================================================
        HIDDEN ELEMENTS
        ============================================================ */
-    #captureCanvas { display: none; }
+    #captureCanvas {
+      display: none;
+    }
 
     /* ============================================================
        SCROLLBAR
        ============================================================ */
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 100px; }
+    ::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-subtle);
+      border-radius: 100px;
+    }
 
     /* ============================================================
        ANIMATIONS
        ============================================================ */
     @keyframes fade-in-up {
-      from { opacity: 0; transform: translateY(12px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
-    .animate-in { animation: fade-in-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) both; }
-    .delay-1 { animation-delay: 0.05s; }
-    .delay-2 { animation-delay: 0.10s; }
-    .delay-3 { animation-delay: 0.15s; }
-    .delay-4 { animation-delay: 0.20s; }
-    .delay-5 { animation-delay: 0.25s; }
-    .delay-6 { animation-delay: 0.30s; }
+    .animate-in {
+      animation: fade-in-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+    }
+
+    .delay-1 {
+      animation-delay: 0.05s;
+    }
+
+    .delay-2 {
+      animation-delay: 0.10s;
+    }
+
+    .delay-3 {
+      animation-delay: 0.15s;
+    }
+
+    .delay-4 {
+      animation-delay: 0.20s;
+    }
+
+    .delay-5 {
+      animation-delay: 0.25s;
+    }
+
+    .delay-6 {
+      animation-delay: 0.30s;
+    }
   </style>
 </head>
 
@@ -879,7 +1032,8 @@
               <div class="chat-message assistant">Type a message to analyze its emotion using the text modality.</div>
             </div>
             <form class="chat-form" id="chatForm">
-              <textarea class="chat-input" id="chatInput" rows="1" maxlength="1000" placeholder="Type a message…" aria-label="Message to analyze"></textarea>
+              <textarea class="chat-input" id="chatInput" rows="1" maxlength="1000" placeholder="Type a message…"
+                aria-label="Message to analyze"></textarea>
               <button class="btn btn-primary" id="chatSend" type="submit">Send</button>
             </form>
           </div>
@@ -890,7 +1044,9 @@
       <aside class="stats-panel">
         <!-- Connection -->
         <div class="glass-card animate-in delay-2">
-          <div class="card-header"><h2>Connection</h2></div>
+          <div class="card-header">
+            <h2>Connection</h2>
+          </div>
           <div class="card-body">
             <div class="connection-status disconnected" id="connStatus">
               <span class="status-dot"></span>
@@ -901,7 +1057,9 @@
 
         <!-- Live Stats -->
         <div class="glass-card animate-in delay-3">
-          <div class="card-header"><h2>Live Stats</h2></div>
+          <div class="card-header">
+            <h2>Live Stats</h2>
+          </div>
           <div class="card-body">
             <div class="stat-grid">
               <div class="stat-item">
@@ -972,7 +1130,8 @@
                 <span class="value" id="weightVisionVal">0%</span>
               </div>
               <div class="confidence-bar-track">
-                <div class="confidence-bar-fill" id="weightVisionBar" style="width: 0%; background: var(--accent-blue);"></div>
+                <div class="confidence-bar-fill" id="weightVisionBar"
+                  style="width: 0%; background: var(--accent-blue);"></div>
               </div>
             </div>
 
@@ -982,7 +1141,8 @@
                 <span class="value" id="weightAudioVal">0%</span>
               </div>
               <div class="confidence-bar-track">
-                <div class="confidence-bar-fill" id="weightAudioBar" style="width: 0%; background: var(--accent-purple);"></div>
+                <div class="confidence-bar-fill" id="weightAudioBar"
+                  style="width: 0%; background: var(--accent-purple);"></div>
               </div>
             </div>
 
@@ -992,7 +1152,8 @@
                 <span class="value" id="weightTextVal">0%</span>
               </div>
               <div class="confidence-bar-track">
-                <div class="confidence-bar-fill" id="weightTextBar" style="width: 0%; background: var(--accent-green);"></div>
+                <div class="confidence-bar-fill" id="weightTextBar" style="width: 0%; background: var(--accent-green);">
+                </div>
               </div>
             </div>
           </div>
@@ -1000,7 +1161,9 @@
 
         <!-- Distribution -->
         <div class="glass-card animate-in delay-5">
-          <div class="card-header"><h2>Emotion Probabilities</h2></div>
+          <div class="card-header">
+            <h2>Emotion Probabilities</h2>
+          </div>
           <div class="card-body emotion-history" id="emotionDistribution">
             <!-- built by JS -->
           </div>
@@ -1024,18 +1187,18 @@
     const AUDIO_CHUNK_INTERVAL_MS = 1500;   // send audio every 1.5s
 
     const EMOTION_EMOJIS = {
-      happy:    '😊',
-      sad:      '😢',
-      angry:    '😠',
-      fear:     '😨',
+      happy: '😊',
+      sad: '😢',
+      angry: '😠',
+      fear: '😨',
       surprise: '😲',
     };
 
     const EMOTION_COLORS = {
-      happy:    '#fbbf24',
-      sad:      '#60a5fa',
-      angry:    '#f87171',
-      fear:     '#c084fc',
+      happy: '#fbbf24',
+      sad: '#60a5fa',
+      angry: '#f87171',
+      fear: '#c084fc',
       surprise: '#34d399',
     };
 
@@ -1070,46 +1233,46 @@
     /* ==========================================================
        DOM REFS
        ========================================================== */
-    const $video        = document.getElementById('webcamVideo');
-    const $overlay      = document.getElementById('overlayCanvas');
-    const $capture      = document.getElementById('captureCanvas');
-    const $placeholder  = document.getElementById('videoPlaceholder');
-    const $btnStart     = document.getElementById('btnStart');
-    const $btnStop      = document.getElementById('btnStop');
-    const $faceBadge    = document.getElementById('faceBadge');
-    const $faceBadgeT   = document.getElementById('faceBadgeText');
-    const $fpsBadge     = document.getElementById('fpsBadge');
+    const $video = document.getElementById('webcamVideo');
+    const $overlay = document.getElementById('overlayCanvas');
+    const $capture = document.getElementById('captureCanvas');
+    const $placeholder = document.getElementById('videoPlaceholder');
+    const $btnStart = document.getElementById('btnStart');
+    const $btnStop = document.getElementById('btnStop');
+    const $faceBadge = document.getElementById('faceBadge');
+    const $faceBadgeT = document.getElementById('faceBadgeText');
+    const $fpsBadge = document.getElementById('fpsBadge');
     const $emotionLabel = document.getElementById('emotionLabel');
     const $emotionEmoji = document.getElementById('emotionEmoji');
-    const $emotionLabelT= document.getElementById('emotionLabelText');
-    const $connStatus   = document.getElementById('connStatus');
-    const $connStatusT  = document.getElementById('connStatusText');
-    const $statFps      = document.getElementById('statFps');
-    const $statMpConf   = document.getElementById('statMpConf');
-    const $statEmoji    = document.getElementById('statEmoji');
-    const $statEmoName  = document.getElementById('statEmotionName');
-    const $statConfVal  = document.getElementById('statConfValue');
-    const $statConfBar  = document.getElementById('statConfBar');
+    const $emotionLabelT = document.getElementById('emotionLabelText');
+    const $connStatus = document.getElementById('connStatus');
+    const $connStatusT = document.getElementById('connStatusText');
+    const $statFps = document.getElementById('statFps');
+    const $statMpConf = document.getElementById('statMpConf');
+    const $statEmoji = document.getElementById('statEmoji');
+    const $statEmoName = document.getElementById('statEmotionName');
+    const $statConfVal = document.getElementById('statConfValue');
+    const $statConfBar = document.getElementById('statConfBar');
     const $statVitConfV = document.getElementById('statVitConfValue');
     const $statVitConfB = document.getElementById('statVitConfBar');
-    const $distPanel    = document.getElementById('emotionDistribution');
-    const $transcript   = document.getElementById('transcriptText');
-    const $sttBadge     = document.getElementById('sttBadge');
-    const $chatForm     = document.getElementById('chatForm');
-    const $chatInput    = document.getElementById('chatInput');
+    const $distPanel = document.getElementById('emotionDistribution');
+    const $transcript = document.getElementById('transcriptText');
+    const $sttBadge = document.getElementById('sttBadge');
+    const $chatForm = document.getElementById('chatForm');
+    const $chatInput = document.getElementById('chatInput');
     const $chatMessages = document.getElementById('chatMessages');
-    const $audioMeter   = document.getElementById('audioMeter');
-    const $fusionBadge  = document.getElementById('fusionModeBadge');
-    const $pillVideo    = document.getElementById('pillVideo');
-    const $pillAudio    = document.getElementById('pillAudio');
-    const $pillText     = document.getElementById('pillText');
-    const $emotionSrcTag= document.getElementById('emotionSourceTag');
+    const $audioMeter = document.getElementById('audioMeter');
+    const $fusionBadge = document.getElementById('fusionModeBadge');
+    const $pillVideo = document.getElementById('pillVideo');
+    const $pillAudio = document.getElementById('pillAudio');
+    const $pillText = document.getElementById('pillText');
+    const $emotionSrcTag = document.getElementById('emotionSourceTag');
     const $weightVisionVal = document.getElementById('weightVisionVal');
     const $weightVisionBar = document.getElementById('weightVisionBar');
-    const $weightAudioVal  = document.getElementById('weightAudioVal');
-    const $weightAudioBar  = document.getElementById('weightAudioBar');
-    const $weightTextVal   = document.getElementById('weightTextVal');
-    const $weightTextBar   = document.getElementById('weightTextBar');
+    const $weightAudioVal = document.getElementById('weightAudioVal');
+    const $weightAudioBar = document.getElementById('weightAudioBar');
+    const $weightTextVal = document.getElementById('weightTextVal');
+    const $weightTextBar = document.getElementById('weightTextBar');
     const $fusionAttentionBadge = document.getElementById('fusionAttentionBadge');
 
     /* ==========================================================
@@ -1724,7 +1887,7 @@
       // ViT prediction (face)
       if (data.face_detected && data.vit_prediction) {
         const vitLabel = data.vit_prediction.label;
-        const vitConf  = data.vit_prediction.confidence;
+        const vitConf = data.vit_prediction.confidence;
         const color = EMOTION_COLORS[vitLabel] || '#6c8aff';
 
         setFaceBadge(true);
@@ -1747,10 +1910,10 @@
       const fusion = data.fusion_prediction;
       if (fusion && fusion.label) {
         const label = fusion.label;
-        const conf  = fusion.confidence;
+        const conf = fusion.confidence;
         const emoji = EMOTION_EMOJIS[label] || '❓';
         const color = EMOTION_COLORS[label] || '#6c8aff';
-        const mods  = fusion.modalities_used || [];
+        const mods = fusion.modalities_used || [];
 
         // Video emotion pill
         $emotionLabel.style.display = '';
@@ -1810,7 +1973,7 @@
       } else if (data.face_detected && data.vit_prediction) {
         // Fallback: show ViT-only result
         const label = data.vit_prediction.label;
-        const conf  = data.vit_prediction.confidence;
+        const conf = data.vit_prediction.confidence;
         const emoji = EMOTION_EMOJIS[label] || '❓';
 
         $emotionLabel.style.display = '';
@@ -1839,7 +2002,7 @@
        ========================================================== */
     async function startSession() {
       $btnStart.disabled = true;
-      $btnStop.disabled  = false;
+      $btnStop.disabled = false;
       running = true;
       reconnectAttempts = 0;
 
@@ -1851,7 +2014,7 @@
     function stopSession() {
       running = false;
       $btnStart.disabled = false;
-      $btnStop.disabled  = true;
+      $btnStop.disabled = true;
 
       if (ws && !inFlightChat && chatQueue.length === 0) { ws.close(); ws = null; }
       stopMedia();
@@ -1878,4 +2041,5 @@
     });
   </script>
 </body>
+
 </html>

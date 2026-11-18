@@ -27,11 +27,11 @@
 
   // Color palette matching EmotionFusion design tokens
   const EMOTION_THEME = {
-    happy:    { bg: 'rgba(251, 191, 36, 0.75)',  border: '#fbbf24', emoji: '😊' },
-    sad:      { bg: 'rgba(96, 165, 250, 0.75)',  border: '#60a5fa', emoji: '😢' },
-    angry:    { bg: 'rgba(248, 113, 113, 0.75)', border: '#f87171', emoji: '😠' },
-    fear:     { bg: 'rgba(192, 132, 252, 0.75)', border: '#c084fc', emoji: '😨' },
-    surprise: { bg: 'rgba(52, 211, 153, 0.75)',  border: '#34d399', emoji: '😲' },
+    happy: { bg: 'rgba(251, 191, 36, 0.75)', border: '#fbbf24', emoji: '😊' },
+    sad: { bg: 'rgba(96, 165, 250, 0.75)', border: '#60a5fa', emoji: '😢' },
+    angry: { bg: 'rgba(248, 113, 113, 0.75)', border: '#f87171', emoji: '😠' },
+    fear: { bg: 'rgba(192, 132, 252, 0.75)', border: '#c084fc', emoji: '😨' },
+    surprise: { bg: 'rgba(52, 211, 153, 0.75)', border: '#34d399', emoji: '😲' },
   };
 
   // ============================================================
@@ -43,6 +43,9 @@
   let isRunning = false;
   let activeWsUrl = DEFAULT_WS_ENDPOINT;
   let reconnectTimer = null;
+
+  // Session analytics accumulator (Task 2)
+  const sessionLog = [];
 
   // DOM Elements
   let $canvas = null;
@@ -282,6 +285,22 @@
 
     // Update DOM indicators
     updateSummaryCards(label, confidence, modalitiesUsed, data.transcript);
+
+    // Live transcript: directly assign to prevent text duplication
+    const payload = data;
+    if (document.getElementById('transcriptBox') && payload.transcript !== undefined) {
+      document.getElementById('transcriptBox').textContent = payload.transcript;
+    }
+
+    // Task 2: Accumulate session log for post-call analytics
+    if (data.transcript && data.transcript.trim()) {
+      sessionLog.push({
+        timestamp: Date.now(),
+        label: label,
+        probs: Object.assign({}, probsMap),
+        text: data.transcript.trim(),
+      });
+    }
   }
 
   function updateSummaryCards(label, confidence, modalities, transcript) {
@@ -304,10 +323,18 @@
       $dominantPill.style.color = theme.border;
     }
 
-    // Modality indicators
-    if ($modVision) $modVision.classList.toggle('active', modalities.includes('vision'));
-    if ($modAudio)  $modAudio.classList.toggle('active', modalities.includes('audio'));
-    if ($modText)   $modText.classList.toggle('active', modalities.includes('text'));
+    // Modality indicators (Tailwind-native active states)
+    function setPillActive(el, active) {
+      if (!el) return;
+      if (active) {
+        el.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 transition-all';
+      } else {
+        el.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-800 text-gray-500 border border-gray-700/60 transition-all';
+      }
+    }
+    setPillActive($modVision, modalities.includes('vision'));
+    setPillActive($modAudio, modalities.includes('audio'));
+    setPillActive($modText, modalities.includes('text'));
 
     // Live speech transcript
     if ($transcriptText && transcript) {
@@ -321,8 +348,284 @@
     }
     if ($statusBadge) {
       $statusBadge.textContent = text;
-      $statusBadge.className = 'card-badge status-' + state;
+      const base = 'text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ';
+      if (state === 'live') {
+        $statusBadge.className = base + 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+      } else if (state === 'connecting') {
+        $statusBadge.className = base + 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+      } else if (state === 'error' || state === 'disconnected') {
+        $statusBadge.className = base + 'bg-red-500/10 text-red-400 border-red-500/30';
+      } else {
+        $statusBadge.className = base + 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30';
+      }
     }
+  }
+
+  // ============================================================
+  // POST-CALL ANALYTICS RENDERER (Task 3)
+  // ============================================================
+
+  let timelineChartInstance = null;
+
+  function renderPostCallDashboard() {
+    console.log('[DoctorDashboard] Rendering post-call analytics (' + sessionLog.length + ' entries).');
+
+    // ── Timeline badge ──
+    const $badge = document.getElementById('pcTimelineBadge');
+    if ($badge) {
+      $badge.textContent = sessionLog.length + ' data points';
+    }
+
+    // ── 1. Session Timeline Line Chart ──
+    renderTimelineChart();
+
+    // ── 2. GRE-Style Interactive Transcript ──
+    renderInteractiveTranscript();
+  }
+
+  function renderTimelineChart() {
+    const $canvas = document.getElementById('sessionTimelineChart');
+    if (!$canvas || typeof Chart === 'undefined') return;
+
+    if (timelineChartInstance) {
+      timelineChartInstance.destroy();
+      timelineChartInstance = null;
+    }
+
+    if (!sessionLog || sessionLog.length === 0) return;
+
+    // Build time-axis labels (relative seconds from session start)
+    const t0 = sessionLog[0].timestamp || Date.now();
+    const timeLabels = sessionLog.map(e => {
+      const ts = e.timestamp || t0;
+      const elapsedSec = Math.max(0, (ts - t0) / 1000);
+      return elapsedSec.toFixed(0) + 's';
+    });
+
+    // Build one dataset per emotion mapping timestamp and probs dictionaries from sessionLog
+    const datasets = EMOTION_KEYS.map((key, idx) => {
+      const theme = EMOTION_THEME[key];
+      return {
+        label: EMOTION_CLASSES[idx],
+        data: sessionLog.map(e => {
+          if (!e || !e.probs || typeof e.probs !== 'object') return 0;
+          const v = e.probs[key] ?? e.probs[key.charAt(0).toUpperCase() + key.slice(1)] ?? 0;
+          const num = Number(v);
+          if (isNaN(num)) return 0;
+          return num <= 1 ? Number(num.toFixed(3)) : Number((num / 100).toFixed(3));
+        }),
+        borderColor: theme.border,
+        backgroundColor: theme.bg.replace('0.75', '0.12'),
+        borderWidth: 2,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+        tension: 0.35,
+        fill: false,
+      };
+    });
+
+    const ctx = $canvas.getContext('2d');
+    timelineChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: { labels: timeLabels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        layout: { padding: { top: 8, bottom: 4, left: 4, right: 12 } },
+        animation: { duration: 600, easing: 'easeOutQuart' },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: '#8b8b9e',
+              font: { family: "'Inter', sans-serif", size: 11, weight: 600 },
+              boxWidth: 10, boxHeight: 10, borderRadius: 3,
+              padding: 14, usePointStyle: true, pointStyle: 'circle',
+            },
+          },
+          tooltip: {
+            backgroundColor: 'rgba(14,14,22,0.92)',
+            titleColor: '#f0f0f5',
+            bodyColor: '#22d3ee',
+            titleFont: { family: "'Inter', sans-serif", size: 12, weight: '700' },
+            bodyFont: { family: "'JetBrains Mono', monospace", size: 11 },
+            borderColor: 'rgba(255,255,255,0.12)',
+            borderWidth: 1, padding: 10, cornerRadius: 8,
+            callbacks: {
+              label: (ctx) => ctx.dataset.label + ': ' + (ctx.parsed.y * 100).toFixed(1) + '%',
+            },
+          },
+        },
+        scales: {
+          x: {
+            title: {
+              display: true, text: 'Session Time',
+              color: '#8b8b9e',
+              font: { family: "'Inter', sans-serif", size: 11, weight: 600 },
+            },
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: {
+              color: '#8b8b9e',
+              font: { family: "'JetBrains Mono', monospace", size: 10 },
+              maxTicksLimit: 20,
+            },
+          },
+          y: {
+            beginAtZero: true, max: 1,
+            title: {
+              display: true, text: 'Confidence',
+              color: '#8b8b9e',
+              font: { family: "'Inter', sans-serif", size: 11, weight: 600 },
+            },
+            ticks: {
+              stepSize: 0.25,
+              color: '#8b8b9e',
+              font: { family: "'JetBrains Mono', monospace", size: 10 },
+              callback: (v) => (v * 100).toFixed(0) + '%',
+            },
+            grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+          },
+        },
+      },
+    });
+  }
+
+  // Tailwind emotion highlighting styles for GRE-style sentiment analysis
+  const TAILWIND_EMOTION_STYLES = {
+    happy: {
+      bg: 'bg-yellow-900/60',
+      text: 'text-yellow-200',
+      border: 'border-yellow-600/60',
+      tagBg: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
+    },
+    sad: {
+      bg: 'bg-blue-900/60',
+      text: 'text-blue-200',
+      border: 'border-blue-600/60',
+      tagBg: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+    },
+    angry: {
+      bg: 'bg-red-900/60',
+      text: 'text-red-200',
+      border: 'border-red-600/60',
+      tagBg: 'bg-red-500/20 text-red-300 border-red-500/40',
+    },
+    fear: {
+      bg: 'bg-purple-900/60',
+      text: 'text-purple-200',
+      border: 'border-purple-600/60',
+      tagBg: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    },
+    surprise: {
+      bg: 'bg-emerald-900/60',
+      text: 'text-emerald-200',
+      border: 'border-emerald-600/60',
+      tagBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    },
+  };
+
+  function renderInteractiveTranscript() {
+    const $container = document.getElementById('interactiveTranscript');
+    if (!$container) return;
+
+    if (!sessionLog || sessionLog.length === 0) {
+      $container.innerHTML =
+        '<div class="h-full flex flex-col items-center justify-center text-gray-500 gap-2">' +
+        '<span class="text-3xl">📝</span>' +
+        '<p class="text-xs">No transcript data was captured during this session.</p>' +
+        '</div>';
+      return;
+    }
+
+    // Deduplicate consecutive identical transcripts
+    const unique = [];
+    let prevText = '';
+    for (let i = 0; i < sessionLog.length; i++) {
+      const entry = sessionLog[i];
+      if (entry && entry.text && entry.text.trim() && entry.text.trim() !== prevText) {
+        unique.push(entry);
+        prevText = entry.text.trim();
+      }
+    }
+
+    if (unique.length === 0) {
+      $container.innerHTML =
+        '<div class="h-full flex flex-col items-center justify-center text-gray-500 gap-2">' +
+        '<span class="text-3xl">📝</span>' +
+        '<p class="text-xs">No distinct transcript segments found.</p>' +
+        '</div>';
+      return;
+    }
+
+    // Generate HTML string of <span class="gre-sentence"> tags by parsing sessionLog array
+    let htmlString = '<p class="text-sm leading-relaxed text-gray-300 space-x-1.5">';
+    for (let idx = 0; idx < unique.length; idx++) {
+      const entry = unique[idx];
+      const normLabel = (entry.label || 'neutral').toLowerCase();
+      const style = TAILWIND_EMOTION_STYLES[normLabel] || {
+        tagBg: 'bg-gray-700 text-gray-300 border-gray-600',
+      };
+      htmlString += `<span class="gre-sentence cursor-pointer px-2 py-0.5 rounded transition-all duration-150 inline-block hover:bg-gray-700/60 border border-transparent" data-emotion="${normLabel}" data-index="${idx}">${entry.text}<span class="gre-emotion-tag hidden ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${style.tagBg}">${normLabel}</span></span> `;
+    }
+    htmlString += '</p>';
+
+    // Append/set HTML string to interactiveTranscript.innerHTML
+    $container.innerHTML = htmlString;
+
+    // Attach click listeners for interactive sentiment highlighting
+    $container.querySelectorAll('.gre-sentence').forEach((span) => {
+      span.addEventListener('click', () => {
+        const normLabel = span.getAttribute('data-emotion') || 'neutral';
+        const style = TAILWIND_EMOTION_STYLES[normLabel] || {
+          bg: 'bg-gray-800',
+          text: 'text-gray-200',
+          border: 'border-gray-600',
+        };
+        const tag = span.querySelector('.gre-emotion-tag');
+        const isHighlighted = span.classList.contains('is-highlighted');
+
+        if (isHighlighted) {
+          span.classList.remove('is-highlighted', style.bg, style.text, style.border);
+          span.classList.add('border-transparent', 'hover:bg-gray-700/60');
+          if (tag) tag.classList.add('hidden');
+        } else {
+          span.classList.add('is-highlighted', style.bg, style.text, style.border);
+          span.classList.remove('border-transparent', 'hover:bg-gray-700/60');
+          if (tag) tag.classList.remove('hidden');
+        }
+      });
+    });
+  }
+
+  // ============================================================
+  // TAILWIND DISPLAY TOGGLES (Task 2)
+  // ============================================================
+
+  function showPostCallDashboard() {
+    const $mainStage = document.getElementById('mainStage');
+    const $postCall = document.getElementById('postCallDashboard');
+    if ($mainStage) $mainStage.classList.add('hidden');
+    if ($postCall) {
+      $postCall.classList.remove('hidden');
+      $postCall.classList.add('flex');
+    }
+    renderPostCallDashboard();
+  }
+
+  function hidePostCallDashboard() {
+    const $mainStage = document.getElementById('mainStage');
+    const $postCall = document.getElementById('postCallDashboard');
+    if ($postCall) {
+      $postCall.classList.add('hidden');
+      $postCall.classList.remove('flex');
+    }
+    if ($mainStage) $mainStage.classList.remove('hidden');
+  }
+
+  function leaveCall() {
+    stopDashboard();
+    showPostCallDashboard();
   }
 
   // ============================================================
@@ -365,7 +668,7 @@
     $modVision = document.getElementById('modVisionBadge');
     $modAudio = document.getElementById('modAudioBadge');
     $modText = document.getElementById('modTextBadge');
-    $transcriptText = document.getElementById('doctorTranscriptText');
+    $transcriptText = document.getElementById('transcriptBox') || document.getElementById('doctorTranscriptText');
   }
 
   // ============================================================
@@ -376,8 +679,13 @@
     start: startDashboard,
     stop: stopDashboard,
     initChart: initChart,
+    leaveCall: leaveCall,
+    showPostCallDashboard: showPostCallDashboard,
+    hidePostCallDashboard: hidePostCallDashboard,
+    renderPostCallDashboard: renderPostCallDashboard,
     get chart() { return chartInstance; },
     get isRunning() { return isRunning; },
+    get sessionLog() { return sessionLog; },
   };
 
   document.addEventListener('DOMContentLoaded', () => {

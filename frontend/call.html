@@ -1,656 +1,248 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EmotionFusion — Video Call</title>
+  <title>EmotionFusion — Telemedicine Clinical Call</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>
-    /* ============================================================
-       DESIGN TOKENS (shared with main dashboard)
-       ============================================================ */
-    :root {
-      --bg-primary: #06060b;
-      --bg-secondary: #0e0e16;
-      --bg-card: rgba(255, 255, 255, 0.035);
-      --border-subtle: rgba(255, 255, 255, 0.07);
-      --border-glow: rgba(255, 255, 255, 0.13);
-      --text-primary: #f0f0f5;
-      --text-secondary: #8b8b9e;
-      --text-muted: #55556a;
-      --accent-blue: #6c8aff;
-      --accent-purple: #a78bfa;
-      --accent-cyan: #22d3ee;
-      --accent-green: #34d399;
-      --accent-red: #f87171;
-      --accent-amber: #fbbf24;
-      --glass-bg: rgba(14, 14, 22, 0.72);
-      --glass-border: rgba(255, 255, 255, 0.1);
-      --glass-blur: 24px;
-      --radius-md: 14px;
-      --radius-lg: 20px;
-      --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.45);
-      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-      --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html { font-size: 16px; }
-
-    body {
-      font-family: var(--font-sans);
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    body::before {
-      content: '';
-      position: fixed; inset: 0;
-      background:
-        radial-gradient(ellipse 80% 60% at 15% 8%, rgba(108,138,255,0.06) 0%, transparent 60%),
-        radial-gradient(ellipse 50% 40% at 85% 85%, rgba(167,139,250,0.05) 0%, transparent 60%);
-      pointer-events: none; z-index: 0;
-    }
-
-    /* ============================================================
-       HEADER
-       ============================================================ */
-    .header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 28px;
-      border-bottom: 1px solid var(--border-subtle);
-      backdrop-filter: blur(var(--glass-blur));
-      background: var(--glass-bg);
-      position: relative; z-index: 10;
-    }
-
-    .header-brand { display: flex; align-items: center; gap: 12px; }
-
-    .header-brand .logo-icon {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple), var(--accent-cyan));
-      border-radius: 8px; display: grid; place-items: center;
-      font-size: 17px;
-      box-shadow: 0 0 20px rgba(108,138,255,0.35);
-    }
-
-    .header-brand h1 {
-      font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em;
-      background: linear-gradient(135deg, var(--text-primary), var(--accent-blue));
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-
-    .header-brand .subtitle {
-      font-size: 0.65rem; color: var(--text-muted); font-weight: 500;
-      text-transform: uppercase; letter-spacing: 0.1em;
-    }
-
-    /* ============================================================
-       JOIN PANEL
-       ============================================================ */
-    .join-panel {
-      display: flex; align-items: center; gap: 10px;
-      padding: 20px 28px;
-      border-bottom: 1px solid var(--border-subtle);
-      background: rgba(255,255,255,0.015);
-      position: relative; z-index: 5;
-    }
-
-    .join-panel label {
-      font-size: 0.78rem; font-weight: 600; color: var(--text-secondary);
-      white-space: nowrap;
-    }
-
-    .join-panel input[type="text"] {
-      flex: 1; max-width: 280px;
-      padding: 9px 14px; border-radius: 100px;
-      border: 1px solid var(--border-subtle);
-      background: rgba(255,255,255,0.04); color: var(--text-primary);
-      font: 0.82rem var(--font-mono); outline: none;
-    }
-    .join-panel input:focus { border-color: rgba(108,138,255,0.55); }
-
-    .role-select {
-      padding: 9px 14px;
-      border-radius: 100px;
-      border: 1px solid var(--border-subtle);
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text-primary);
-      font: 0.8rem var(--font-sans);
-      outline: none;
-      cursor: pointer;
-    }
-    .role-select:focus { border-color: rgba(108, 138, 255, 0.55); }
-    .role-select option { background: var(--bg-secondary); color: var(--text-primary); }
-
-    .btn {
-      display: inline-flex; align-items: center; gap: 7px;
-      padding: 9px 22px; border-radius: 100px;
-      font-family: var(--font-sans); font-size: 0.78rem; font-weight: 600;
-      border: none; cursor: pointer; transition: all var(--transition-smooth);
-      letter-spacing: 0.01em; outline: none;
-    }
-    .btn:active { transform: scale(0.97); }
-
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-      color: #fff; box-shadow: 0 4px 20px rgba(108,138,255,0.25);
-    }
-    .btn-primary:hover { box-shadow: 0 6px 28px rgba(108,138,255,0.4); transform: translateY(-1px); }
-    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
-
-    .btn-danger {
-      background: rgba(248,113,113,0.15); color: var(--accent-red);
-      border: 1px solid rgba(248,113,113,0.2);
-    }
-    .btn-danger:hover { background: rgba(248,113,113,0.25); }
-
-    .btn-icon {
-      width: 42px; height: 42px; padding: 0;
-      border-radius: 50%; display: grid; place-items: center;
-      font-size: 1.1rem; background: var(--bg-card);
-      border: 1px solid var(--border-subtle); color: var(--text-primary);
-      cursor: pointer; transition: all var(--transition-smooth);
-    }
-    .btn-icon:hover { border-color: var(--border-glow); background: rgba(255,255,255,0.06); }
-    .btn-icon.muted { background: rgba(248,113,113,0.15); border-color: rgba(248,113,113,0.3); color: var(--accent-red); }
-
-    /* ============================================================
-       ENVIRONMENT CHECK OVERLAY (Task 1: Pre-Call Calibration)
-       ============================================================ */
-    .env-check-overlay {
-      position: fixed; inset: 0; z-index: 1000;
-      display: none; place-items: center;
-      background: rgba(6, 6, 11, 0.92);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-    }
-    .env-check-overlay.visible { display: grid; }
-
-    .env-check-card {
-      text-align: center;
-      padding: 40px 48px;
-      border-radius: var(--radius-lg);
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      box-shadow: var(--shadow-card);
-      max-width: 380px; width: 90%;
-    }
-
-    .env-check-card .env-icon {
-      font-size: 3rem; margin-bottom: 12px;
-      animation: env-pulse 1.2s ease-in-out infinite alternate;
-    }
-    @keyframes env-pulse {
-      from { transform: scale(1); opacity: 0.85; }
-      to   { transform: scale(1.12); opacity: 1; }
-    }
-
-    .env-check-card h2 {
-      font-size: 1.1rem; font-weight: 700; margin-bottom: 6px;
-      color: var(--text-primary);
-    }
-
-    .env-check-card .env-subtitle {
-      font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 20px;
-    }
-
-    .env-progress-bar {
-      width: 100%; height: 6px;
-      border-radius: 100px;
-      background: rgba(255,255,255,0.06);
-      overflow: hidden; margin-bottom: 10px;
-    }
-
-    .env-progress-fill {
-      height: 100%; width: 0%;
-      border-radius: 100px;
-      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
-      transition: width 0.5s linear;
-    }
-
-    .env-countdown {
-      font-size: 0.72rem; font-family: var(--font-mono);
-      color: var(--text-muted);
-    }
-
-    .env-listening-dots {
-      display: flex; gap: 6px; justify-content: center; margin-top: 14px;
-    }
-    .env-listening-dots span {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--accent-cyan);
-      animation: env-dot-bounce 0.8s ease-in-out infinite;
-    }
-    .env-listening-dots span:nth-child(2) { animation-delay: 0.15s; }
-    .env-listening-dots span:nth-child(3) { animation-delay: 0.3s; }
-    @keyframes env-dot-bounce {
-      0%, 100% { opacity: 0.3; transform: translateY(0); }
-      50%      { opacity: 1;   transform: translateY(-5px); }
-    }
-
-    .status-pill {
-      display: flex; align-items: center; gap: 7px;
-      padding: 6px 14px; border-radius: 100px;
-      font-size: 0.72rem; font-weight: 600;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-    }
-
-    .status-pill .dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--accent-amber);
-    }
-    .status-pill.connected .dot { background: var(--accent-green); animation: pulse-dot 2s ease-in-out infinite; }
-
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.85); }
-    }
-
-    /* ============================================================
-       VIDEO & TELEMETRY GRID
-       ============================================================ */
-    .video-grid {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 300px 1.2fr 380px;
-      gap: 20px;
-      padding: 20px 28px;
-      position: relative; z-index: 1;
-      align-items: stretch;
-    }
-
-    @media (max-width: 1200px) {
-      .video-grid {
-        grid-template-columns: 1fr 1fr;
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
       }
-      .doctor-dashboard-card {
-        grid-column: 1 / -1;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .video-grid { grid-template-columns: 1fr; }
-    }
-
-    .video-tile {
-      position: relative;
-      aspect-ratio: 4 / 3;
-      background: var(--bg-secondary);
-      border-radius: var(--radius-lg);
-      border: 1px solid var(--border-subtle);
-      overflow: hidden;
-      box-shadow: var(--shadow-card);
-      transition: border-color var(--transition-smooth);
-    }
-    .video-tile:hover { border-color: var(--border-glow); }
-
-    .video-tile video {
-      width: 100%; height: 100%;
-      object-fit: cover; display: block;
-    }
-
-    .video-tile .tile-label {
-      position: absolute; bottom: 12px; left: 12px;
-      padding: 5px 14px; border-radius: 100px;
-      font-size: 0.72rem; font-weight: 600;
-      backdrop-filter: blur(16px);
-      background: rgba(15,23,42,0.75);
-      border: 1px solid rgba(255,255,255,0.15);
-      color: var(--text-primary); z-index: 5;
-    }
-
-    .video-placeholder {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 12px; color: var(--text-muted);
-    }
-
-    .video-placeholder .ph-icon {
-      width: 56px; height: 56px; border-radius: 50%;
-      background: var(--bg-card); border: 2px dashed var(--border-subtle);
-      display: grid; place-items: center; font-size: 24px;
-    }
-
-    .video-placeholder p { font-size: 0.82rem; font-weight: 500; }
-
-    /* ============================================================
-       DOCTOR TELEMETRY DASHBOARD CARD
-       ============================================================ */
-    .doctor-dashboard-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
-      backdrop-filter: blur(var(--glass-blur));
-      -webkit-backdrop-filter: blur(var(--glass-blur));
-      box-shadow: var(--shadow-card);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      min-height: 420px;
-    }
-
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--border-subtle);
-    }
-
-    .card-title-group {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .card-title-group h2 {
-      font-size: 0.78rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-primary);
-    }
-
-    .telemetry-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--accent-cyan);
-      box-shadow: 0 0 10px var(--accent-cyan);
-      animation: pulse-dot 2s ease-in-out infinite;
-    }
-
-    .card-badge {
-      font-size: 0.65rem;
-      font-weight: 600;
-      padding: 3px 10px;
-      border-radius: 100px;
-      background: rgba(108, 138, 255, 0.1);
-      color: var(--accent-blue);
-      border: 1px solid rgba(108, 138, 255, 0.2);
-    }
-
-    .card-badge.status-live {
-      background: rgba(52, 211, 153, 0.15);
-      color: var(--accent-green);
-      border-color: rgba(52, 211, 153, 0.3);
-    }
-
-    .card-badge.status-connecting {
-      background: rgba(251, 191, 36, 0.15);
-      color: var(--accent-amber);
-      border-color: rgba(251, 191, 36, 0.3);
-    }
-
-    .card-badge.status-disconnected, .card-badge.status-error {
-      background: rgba(248, 113, 113, 0.15);
-      color: var(--accent-red);
-      border-color: rgba(248, 113, 113, 0.3);
-    }
-
-    .card-body {
-      padding: 16px 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      flex: 1;
-    }
-
-    .dominant-emotion-banner {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 14px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-    }
-
-    .dominant-emoji {
-      font-size: 2.2rem;
-      line-height: 1;
-    }
-
-    .dominant-info {
-      flex: 1;
-    }
-
-    .dominant-label {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-
-    .dominant-conf {
-      font-size: 0.72rem;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-    }
-
-    .dominant-pill {
-      font-size: 0.65rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      padding: 4px 10px;
-      border-radius: 100px;
-      border: 1px solid var(--border-subtle);
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text-secondary);
-    }
-
-    .chart-wrapper {
-      position: relative;
-      flex: 1;
-      min-height: 200px;
-      width: 100%;
-    }
-
-    .telemetry-meta {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      border-top: 1px solid var(--border-subtle);
-      padding-top: 12px;
-    }
-
-    .modality-badges {
-      display: flex;
-      gap: 8px;
-    }
-
-    .mod-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      padding: 4px 10px;
-      border-radius: 100px;
-      font-size: 0.68rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      background: rgba(255, 255, 255, 0.025);
-      border: 1px solid var(--border-subtle);
-      transition: all var(--transition-smooth);
-    }
-
-    .mod-pill.active {
-      color: var(--accent-cyan);
-      border-color: rgba(34, 211, 238, 0.3);
-      background: rgba(34, 211, 238, 0.1);
-    }
-
-    .mod-pill .dot {
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-
-    .patient-transcript-box {
-      background: rgba(0, 0, 0, 0.25);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-sm);
-      padding: 8px 12px;
-      font-size: 0.75rem;
-    }
-
-    .transcript-tag {
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      display: block;
-      margin-bottom: 2px;
-    }
-
-    .transcript-quote {
-      color: var(--text-secondary);
-      font-style: italic;
-      line-height: 1.4;
-      max-height: 48px;
-      overflow-y: auto;
-    }
-
-    /* ============================================================
-       CONTROLS BAR
-       ============================================================ */
-    .controls-bar {
-      display: flex; align-items: center; justify-content: center;
-      gap: 14px;
-      padding: 16px 28px;
-      border-top: 1px solid var(--border-subtle);
-      background: var(--glass-bg);
-      backdrop-filter: blur(var(--glass-blur));
-      position: relative; z-index: 10;
-    }
-  </style>
+    };
+  </script>
 </head>
 
-<body>
-  <!-- ====== ENVIRONMENT CHECK OVERLAY (Task 1: Pre-Call Calibration) ====== -->
-  <div class="env-check-overlay" id="envCheckOverlay">
-    <div class="env-check-card">
-      <div class="env-icon">🎤</div>
-      <h2>Environment Check</h2>
-      <p class="env-subtitle">Calibrating ambient noise level for optimal emotion detection…</p>
-      <div class="env-progress-bar">
-        <div class="env-progress-fill" id="envProgressFill"></div>
+<body
+  class="bg-gray-900 text-white min-h-screen flex flex-col font-sans antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+
+  <!-- ====== ENVIRONMENT CHECK OVERLAY (Pre-Call Calibration) ====== -->
+  <div id="envCheckOverlay" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 items-center justify-center hidden">
+    <div
+      class="bg-gray-800/95 border border-gray-700/80 rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl text-center backdrop-blur-xl">
+      <div class="text-4xl mb-3 animate-pulse">🎤</div>
+      <h2 class="text-lg font-bold text-white mb-1">Environment Check</h2>
+      <p class="text-xs text-gray-400 mb-6 leading-relaxed">Calibrating ambient noise floor for optimal multimodal
+        emotion detection…</p>
+      <div class="w-full bg-gray-700/60 rounded-full h-2 mb-2 overflow-hidden">
+        <div id="envProgressFill"
+          class="bg-gradient-to-r from-cyan-400 to-indigo-500 h-2 rounded-full transition-all duration-300 w-0"></div>
       </div>
-      <div class="env-countdown" id="envCountdown">5s remaining</div>
-      <div class="env-listening-dots">
-        <span></span><span></span><span></span>
+      <div id="envCountdown" class="text-xs font-mono text-gray-400">5s remaining</div>
+      <div class="flex justify-center gap-1.5 mt-4">
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+        <span class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
       </div>
     </div>
   </div>
 
-  <!-- ====== HEADER ====== -->
-  <header class="header">
-    <div class="header-brand">
-      <div class="logo-icon">📹</div>
+  <!-- ====== TOP NAVBAR ====== -->
+  <header
+    class="w-full bg-gray-900/90 backdrop-blur-md border-b border-gray-800 px-6 py-3 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-30">
+    <div class="flex items-center gap-3">
+      <div
+        class="w-9 h-9 rounded-lg bg-gradient-to-tr from-indigo-500 via-purple-500 to-cyan-400 flex items-center justify-center text-lg shadow-lg shadow-indigo-500/20">
+        📹
+      </div>
       <div>
-        <h1>EmotionFusion Call</h1>
-        <span class="subtitle">Telemedicine · P2P Video</span>
+        <h1
+          class="text-base font-extrabold tracking-tight bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+          EmotionFusion Call</h1>
+        <span class="text-[10px] uppercase tracking-wider text-indigo-400 font-semibold block">Telemedicine · P2P
+          Video</span>
       </div>
     </div>
-    <div class="status-pill" id="statusPill">
-      <span class="dot"></span>
+
+    <!-- Central Status Pill -->
+    <div id="statusPill"
+      class="flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold bg-gray-800 text-gray-400 border border-gray-700/80 transition-colors">
+      <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
       <span id="callStatus">Ready</span>
+    </div>
+
+    <!-- Controls & Leave Button -->
+    <div class="flex items-center gap-2.5">
+      <input type="text" id="roomInput" value="room1"
+        class="bg-gray-800 border border-gray-700 text-gray-100 text-xs font-mono rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-28 transition"
+        placeholder="Room ID" />
+      <select id="roleSelect"
+        class="bg-gray-800 border border-gray-700 text-gray-100 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer transition">
+        <option value="doctor" selected>👨‍⚕️ Doctor (Telemetry)</option>
+        <option value="patient">🧑‍💼 Patient (Multimodal)</option>
+      </select>
+      <button id="btnJoin"
+        class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-1.5 rounded-lg transition shadow-md shadow-indigo-600/30 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">📞
+        Join</button>
+      <button id="btnLeave"
+        class="bg-red-600 hover:bg-red-500 text-white text-xs font-semibold px-4 py-1.5 rounded-lg transition shadow-md shadow-red-600/30 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+        disabled>✕ Leave Call</button>
     </div>
   </header>
 
-  <!-- ====== JOIN ====== -->
-  <div class="join-panel">
-    <label for="roomInput">Room ID:</label>
-    <input type="text" id="roomInput" placeholder="room1" value="room1" />
-    <label for="roleSelect" style="margin-left: 8px;">Role:</label>
-    <select id="roleSelect" class="role-select">
-      <option value="doctor" selected>👨‍⚕️ Doctor (Telemetry View)</option>
-      <option value="patient">🧑‍💼 Patient (Multimodal Send)</option>
-    </select>
-    <button class="btn btn-primary" id="btnJoin">📞 Join Call</button>
-    <button class="btn btn-danger" id="btnLeave" disabled>✕ Leave</button>
-  </div>
+  <!-- ====== MAIN STAGE ====== -->
+  <main id="mainStage" class="flex flex-row w-full h-[calc(100vh-80px)] gap-6 p-6">
+    <!-- Left Column: WebRTC Video Feeds (Dynamic Flex-Grow) -->
+    <section class="flex-grow flex flex-col gap-4 h-full min-w-0">
+      <div class="relative w-full h-full flex-1 bg-black rounded-xl overflow-hidden shadow-lg border border-gray-800 min-h-0">
+        <!-- Remote Peer (Main Screen) -->
+        <video id="remoteVideo" class="absolute inset-0 w-full h-full object-cover z-0" autoplay playsinline></video>
+        <div id="remotePlaceholder"
+          class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-gray-500 gap-2 z-0">
+          <span class="text-5xl">👤</span>
+          <p class="text-sm font-medium">Waiting for peer…</p>
+        </div>
+        <span id="remoteTileLabel"
+          class="absolute bottom-4 left-4 z-10 bg-black/60 backdrop-blur-md border border-white/10 text-white text-xs px-3 py-1 rounded-full font-medium">Remote
+          Peer</span>
 
-  <!-- ====== VIDEO & TELEMETRY GRID ====== -->
-  <div class="video-grid">
-    <!-- Local Camera -->
-    <div class="video-tile">
-      <video id="localVideo" muted autoplay playsinline></video>
-      <div class="video-placeholder" id="localPlaceholder">
-        <div class="ph-icon">🙂</div>
-        <p>Your camera</p>
+        <!-- Local User (PiP Overlay) -->
+        <div
+          class="absolute bottom-4 right-4 w-56 aspect-[4/3] rounded-lg shadow-2xl border-2 border-gray-600 overflow-hidden bg-gray-800 z-20">
+          <video id="localVideo" class="w-full h-full object-cover" muted autoplay playsinline></video>
+          <div id="localPlaceholder"
+            class="absolute inset-0 flex flex-col items-center justify-center bg-gray-800 text-gray-500 gap-1.5">
+            <span class="text-2xl">🙂</span>
+            <p class="text-[11px] font-medium">Your camera</p>
+          </div>
+          <span
+            class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-md border border-white/10 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">You</span>
+        </div>
       </div>
-      <span class="tile-label">You</span>
-    </div>
 
-    <!-- Remote Peer Feed -->
-    <div class="video-tile">
-      <video id="remoteVideo" autoplay playsinline></video>
-      <div class="video-placeholder" id="remotePlaceholder">
-        <div class="ph-icon">👤</div>
-        <p>Waiting for peer…</p>
+      <!-- Quick Media Mute Bar -->
+      <div
+        class="flex items-center justify-center gap-3 py-2 bg-gray-800/80 backdrop-blur-md border border-gray-700/60 rounded-xl max-w-xs mx-auto w-full shadow-md shrink-0">
+        <button id="btnToggleMic"
+          class="w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 text-white flex items-center justify-center text-lg transition active:scale-95"
+          title="Toggle Microphone">🎤</button>
+        <button id="btnToggleCam"
+          class="w-10 h-10 rounded-full bg-gray-700 hover:bg-gray-600 text-white flex items-center justify-center text-lg transition active:scale-95"
+          title="Toggle Camera">📷</button>
       </div>
-      <span class="tile-label" id="remoteTileLabel">Remote Peer</span>
-    </div>
+    </section>
 
-    <!-- Doctor Emotion Telemetry Dashboard (Dynamic Chart.js Bar Chart cleanly placed next to remoteVideo) -->
-    <div class="doctor-dashboard-card glass-card" id="doctorDashboard">
-      <div class="card-header">
-        <div class="card-title-group">
-          <span class="telemetry-dot"></span>
+    <!-- Right Column: Fixed 400px Live Emotion Telemetry Sidebar -->
+    <aside id="doctorDashboard"
+      class="w-[400px] shrink-0 h-full bg-gray-800/90 border border-gray-700/60 rounded-xl shadow-lg flex flex-col overflow-hidden backdrop-blur-md">
+      <div class="px-5 py-3.5 border-b border-gray-700/60 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-gray-300">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
           <h2>Patient Emotion Telemetry</h2>
         </div>
-        <span class="card-badge" id="telemetryStatusBadge">Connecting…</span>
+        <span id="telemetryStatusBadge"
+          class="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">Connecting…</span>
       </div>
 
-      <div class="card-body">
-        <!-- Dominant Emotion Quick Summary -->
-        <div class="dominant-emotion-banner">
-          <div class="dominant-emoji" id="dominantEmoji">🔍</div>
-          <div class="dominant-info">
-            <div class="dominant-label" id="dominantEmotionName">Awaiting Telemetry</div>
-            <div class="dominant-conf" id="dominantConfidence">Listening on room1…</div>
+      <div class="p-5 flex-1 flex flex-col gap-4 min-h-0 overflow-y-auto">
+        <!-- Dominant Emotion Banner -->
+        <div class="bg-gray-900/70 border border-gray-700/60 rounded-xl p-3.5 flex items-center gap-3.5 shrink-0">
+          <div id="dominantEmoji" class="text-3xl leading-none">🔍</div>
+          <div class="flex-1 min-w-0">
+            <div id="dominantEmotionName" class="text-sm font-bold text-white truncate">Awaiting Telemetry</div>
+            <div id="dominantConfidence" class="text-xs font-mono text-gray-400">Listening on room…</div>
           </div>
-          <div class="dominant-pill" id="dominantPill">—</div>
+          <div id="dominantPill"
+            class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 border border-gray-700">—
+          </div>
         </div>
 
-        <!-- Dynamic Chart.js Bar Chart -->
-        <div class="chart-wrapper">
+        <!-- Live Emotion Bar Chart (Explicit height for Safari stability) -->
+        <div class="relative w-full h-[220px] min-h-[200px] shrink-0">
           <canvas id="emotionChart"></canvas>
         </div>
 
-        <!-- Modality Indicators & Live Patient Transcript -->
-        <div class="telemetry-meta">
-          <div class="modality-badges">
-            <span class="mod-pill" id="modVisionBadge"><span class="dot"></span> Vision</span>
-            <span class="mod-pill" id="modAudioBadge"><span class="dot"></span> Audio</span>
-            <span class="mod-pill" id="modTextBadge"><span class="dot"></span> Text</span>
-          </div>
-          <div class="patient-transcript-box">
-            <span class="transcript-tag">Patient Transcript:</span>
-            <p class="transcript-quote" id="doctorTranscriptText">Speech will appear here as the patient speaks…</p>
+        <!-- Modality Pills -->
+        <div class="flex items-center gap-2 pt-2 border-t border-gray-700/60 shrink-0">
+          <span id="modVisionBadge"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-800 text-gray-500 border border-gray-700/60 transition-all">
+            <span class="w-1.5 h-1.5 rounded-full bg-current"></span> Vision
+          </span>
+          <span id="modAudioBadge"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-800 text-gray-500 border border-gray-700/60 transition-all">
+            <span class="w-1.5 h-1.5 rounded-full bg-current"></span> Audio
+          </span>
+          <span id="modTextBadge"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-800 text-gray-500 border border-gray-700/60 transition-all">
+            <span class="w-1.5 h-1.5 rounded-full bg-current"></span> Text
+          </span>
+        </div>
+
+        <!-- Live Patient Transcript -->
+        <div class="bg-gray-900/70 border border-gray-700/60 rounded-lg p-3 text-xs flex flex-col gap-1 shrink-0">
+          <span class="text-[10px] uppercase font-semibold text-gray-500 tracking-wider">Patient Live Transcript</span>
+          <p id="transcriptBox" class="text-gray-300 italic text-xs max-h-24 overflow-y-auto leading-relaxed">
+            Speech will appear here as the patient speaks…</p>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ====== POST-CALL ANALYTICS DASHBOARD (Massive Absolute Overlay) ====== -->
+  <section id="postCallDashboard" class="fixed inset-0 bg-gray-900 z-50 flex-col p-8 hidden overflow-y-auto">
+    <div class="flex items-center justify-between pb-6 mb-6 border-b border-gray-800 max-w-7xl mx-auto w-full">
+      <div class="flex items-center gap-3">
+        <div
+          class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20">
+          📊
+        </div>
+        <div>
+          <h2 class="text-xl font-extrabold tracking-tight text-white">Session Analytics</h2>
+          <p class="text-xs text-gray-400">End-of-Call Emotion Timeline & GRE-Style Interactive Transcript</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="pcTimelineBadge"
+          class="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">—</span>
+        <button id="btnClosePostCall"
+          class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-700 transition">✕
+          Close View</button>
+      </div>
+    </div>
+
+    <!-- 2-Column Responsive Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1 min-h-0 max-w-7xl mx-auto w-full">
+      <!-- Left Column: Session Timeline Chart -->
+      <div class="bg-gray-800/80 border border-gray-700/60 rounded-xl shadow-xl p-6 flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-gray-300">Emotion Confidence Timeline</h3>
+          <span class="text-[11px] text-gray-400">0.0 to 1.0 Temporal Trend</span>
+        </div>
+        <div class="relative w-full h-[450px] min-h-[350px] flex-1">
+          <canvas id="sessionTimelineChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Right Column: GRE-Style Interactive Transcript -->
+      <div class="bg-gray-800/80 border border-gray-700/60 rounded-xl shadow-xl p-6 flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-gray-300">Interactive Transcript</h3>
+          <span class="text-[11px] text-indigo-400">Click sentence to highlight sentiment</span>
+        </div>
+        <div id="interactiveTranscript"
+          class="h-[450px] overflow-y-auto pr-3 flex-1 scrollbar-thin scrollbar-thumb-gray-600">
+          <div class="h-full flex flex-col items-center justify-center text-gray-500 gap-2">
+            <span class="text-3xl">📝</span>
+            <p class="text-xs">Transcript will appear here after the session ends.</p>
           </div>
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- ====== CONTROLS ====== -->
-  <div class="controls-bar">
-    <button class="btn-icon" id="btnToggleMic" title="Toggle microphone">🎤</button>
-    <button class="btn-icon" id="btnToggleCam" title="Toggle camera">📷</button>
-  </div>
+  </section>
 
   <!-- ====== SCRIPTS ====== -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -660,16 +252,19 @@
   <script src="/static/doctor.js"></script>
   <script>
     /* ── DOM refs ── */
-    const $roomInput  = document.getElementById('roomInput');
+    const $roomInput = document.getElementById('roomInput');
     const $roleSelect = document.getElementById('roleSelect');
-    const $btnJoin    = document.getElementById('btnJoin');
-    const $btnLeave   = document.getElementById('btnLeave');
-    const $btnMic     = document.getElementById('btnToggleMic');
-    const $btnCam     = document.getElementById('btnToggleCam');
-    const $localPH    = document.getElementById('localPlaceholder');
-    const $remotePH   = document.getElementById('remotePlaceholder');
+    const $btnJoin = document.getElementById('btnJoin');
+    const $btnLeave = document.getElementById('btnLeave');
+    const $btnMic = document.getElementById('btnToggleMic');
+    const $btnCam = document.getElementById('btnToggleCam');
+    const $localPH = document.getElementById('localPlaceholder');
+    const $remotePH = document.getElementById('remotePlaceholder');
     const $statusPill = document.getElementById('statusPill');
     const $doctorDash = document.getElementById('doctorDashboard');
+    const $mainStage = document.getElementById('mainStage');
+    const $postCall = document.getElementById('postCallDashboard');
+    const $btnClosePC = document.getElementById('btnClosePostCall');
 
     // Parse URL query params if role or room pre-specified (?role=doctor&room=room1)
     const urlParams = new URLSearchParams(window.location.search);
@@ -677,14 +272,23 @@
     if (urlParams.get('role')) $roleSelect.value = urlParams.get('role');
 
     /* ── Observe video elements for placeholder hiding ── */
-    const localVid  = document.getElementById('localVideo');
+    const localVid = document.getElementById('localVideo');
     const remoteVid = document.getElementById('remoteVideo');
 
     function watchStream(videoEl, placeholder) {
       setInterval(() => {
         const active = videoEl.srcObject && videoEl.srcObject.active;
-        placeholder.style.display = active ? 'none' : '';
-        if (active) $statusPill.classList.add('connected');
+        if (placeholder) {
+          if (active) {
+            placeholder.classList.add('hidden');
+          } else {
+            placeholder.classList.remove('hidden');
+          }
+        }
+        if (active && $statusPill) {
+          $statusPill.classList.remove('bg-gray-800', 'text-gray-400', 'border-gray-700/80');
+          $statusPill.classList.add('bg-emerald-500/10', 'text-emerald-400', 'border-emerald-500/30');
+        }
       }, 500);
     }
     watchStream(localVid, $localPH);
@@ -698,20 +302,26 @@
       $btnJoin.disabled = true;
       $btnLeave.disabled = false;
 
-      // Branch behavior based on telemedicine role
+      // Reset views
+      if ($mainStage) $mainStage.classList.remove('hidden');
+      if ($postCall) {
+        $postCall.classList.add('hidden');
+        $postCall.classList.remove('flex');
+      }
+
       if (role === 'doctor') {
-        // Start P2P WebRTC call immediately for doctor
+        // Start WebRTC call immediately for doctor
         await joinCall(room);
-        if ($doctorDash) $doctorDash.style.display = '';
+        if ($doctorDash) $doctorDash.classList.remove('hidden');
         if (window.DoctorDashboard) {
           const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
           window.DoctorDashboard.start(`${wsProto}//${location.host}/ws/multimodal/doctor/${room}`);
         }
       } else {
-        // Patient role: run 5-second environment check BEFORE connecting
-        if ($doctorDash) $doctorDash.style.display = 'none';
+        // Patient role: hide doctor telemetry sidebar
+        if ($doctorDash) $doctorDash.classList.add('hidden');
 
-        // Request media early so we can calibrate the mic
+        // Request media early to calibrate noise floor
         let localStream = null;
         try {
           localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -720,13 +330,13 @@
           console.warn('[Call] getUserMedia failed, proceeding without calibration:', mediaErr);
         }
 
-        // Show calibration overlay
+        // Show calibration overlay using Tailwind flex
         const overlay = document.getElementById('envCheckOverlay');
         const progressFill = document.getElementById('envProgressFill');
         const countdown = document.getElementById('envCountdown');
-        overlay.classList.add('visible');
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
 
-        // Animate the progress bar over 5 seconds
         let remaining = 5;
         progressFill.style.width = '0%';
         const tickInterval = setInterval(() => {
@@ -737,7 +347,6 @@
           }
         }, 1000);
 
-        // Run noise floor calibration (5 seconds)
         if (localStream && window.PatientMLExtractor && window.PatientMLExtractor.calibrateNoiseFloor) {
           try {
             await window.PatientMLExtractor.calibrateNoiseFloor(localStream);
@@ -745,7 +354,6 @@
             console.warn('[Call] Noise calibration error:', calErr);
           }
         } else {
-          // No stream or extractor — just wait the 5s for UX consistency
           await new Promise(r => setTimeout(r, 5000));
         }
 
@@ -753,11 +361,11 @@
         progressFill.style.width = '100%';
         countdown.textContent = 'Done!';
 
-        // Brief pause before hiding overlay
         await new Promise(r => setTimeout(r, 400));
-        overlay.classList.remove('visible');
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
 
-        // NOW start the WebRTC call and ML extraction
+        // Start WebRTC and patient ML extraction
         await joinCall(room);
 
         if (window.PatientMLExtractor) {
@@ -771,6 +379,8 @@
     });
 
     $btnLeave.addEventListener('click', () => {
+      const wasDoctor = $roleSelect.value === 'doctor';
+
       leaveCall();
       if (window.PatientMLExtractor && window.PatientMLExtractor.isRunning) {
         window.PatientMLExtractor.stop();
@@ -780,22 +390,50 @@
       }
       $btnJoin.disabled = false;
       $btnLeave.disabled = true;
-      $statusPill.classList.remove('connected');
+
+      if ($statusPill) {
+        $statusPill.classList.remove('bg-emerald-500/10', 'text-emerald-400', 'border-emerald-500/30');
+        $statusPill.classList.add('bg-gray-800', 'text-gray-400', 'border-gray-700/80');
+      }
+
+      // Show post-call analytics for doctors using Tailwind toggles
+      if (wasDoctor && window.DoctorDashboard) {
+        if ($mainStage) $mainStage.classList.add('hidden');
+        if ($postCall) {
+          $postCall.classList.remove('hidden');
+          $postCall.classList.add('flex');
+        }
+        if (window.DoctorDashboard.renderPostCallDashboard) {
+          window.DoctorDashboard.renderPostCallDashboard();
+        }
+      }
     });
+
+    if ($btnClosePC) {
+      $btnClosePC.addEventListener('click', () => {
+        if ($postCall) {
+          $postCall.classList.add('hidden');
+          $postCall.classList.remove('flex');
+        }
+        if ($mainStage) $mainStage.classList.remove('hidden');
+      });
+    }
 
     /* ── Mic / Cam toggles ── */
     $btnMic.addEventListener('click', () => {
       const on = toggleAudio();
-      $btnMic.classList.toggle('muted', !on);
+      $btnMic.classList.toggle('bg-red-500/20', !on);
+      $btnMic.classList.toggle('text-red-400', !on);
       $btnMic.textContent = on ? '🎤' : '🔇';
     });
 
     $btnCam.addEventListener('click', () => {
       const on = toggleVideo();
-      $btnCam.classList.toggle('muted', !on);
+      $btnCam.classList.toggle('bg-red-500/20', !on);
+      $btnCam.classList.toggle('text-red-400', !on);
       $btnCam.textContent = on ? '📷' : '🚫';
     });
   </script>
 </body>
-</html>
 
+</html>

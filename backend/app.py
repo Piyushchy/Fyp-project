@@ -26,6 +26,7 @@ import struct
 import sys
 import time
 import wave
+from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -41,7 +42,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from starlette.status import WS_1008_POLICY_VIOLATION
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 # ---------------------------------------------------------------------------
@@ -306,6 +307,8 @@ class ConnectionManager:
         self._rooms: dict[str, dict[str, list[WebSocket]]] = {}
         # Task 3: EMA state — room_id -> {emotion: smoothed_prob}
         self._prev_probs: dict[str, dict[str, float]] = {}
+        # Sliding mode filter — room_id -> deque of recent labels (maxlen=5)
+        self._label_history: dict[str, deque] = {}
 
     # -- connection lifecycle -------------------------------------------------
 
@@ -326,6 +329,7 @@ class ConnectionManager:
         if room and not room["patient"] and not room["doctor"]:
             self._rooms.pop(room_id, None)
             self._prev_probs.pop(room_id, None)
+            self._label_history.pop(room_id, None)
         logger.info("WS disconnected  role=%s  room=%s", role, room_id)
 
     # -- targeted broadcast ---------------------------------------------------
@@ -369,6 +373,14 @@ class ConnectionManager:
             # Store for next cycle
             self._prev_probs[room_id] = smoothed
 
+        # Sliding mode filter: majority-vote over the last 5 labels
+        fusion = payload.get("fusion_prediction")
+        if fusion and isinstance(fusion, dict) and fusion.get("label"):
+            history = self._label_history.setdefault(room_id, deque(maxlen=5))
+            history.append(fusion["label"])
+            mode_label = Counter(history).most_common(1)[0][0]
+            payload["fusion_prediction"]["label"] = mode_label
+
         stale: list[WebSocket] = []
         for doc_ws in room["doctor"]:
             try:
@@ -391,10 +403,7 @@ _manager = ConnectionManager()
 
 @app.get("/")
 async def serve_index():
-    index_file = _FRONTEND_DIR / "index.html"
-    if not index_file.exists():
-        index_file = _PROJECT_ROOT / "index.html"
-    return FileResponse(str(index_file), media_type="text/html")
+    return RedirectResponse(url="/call")
 
 
 @app.get("/call")

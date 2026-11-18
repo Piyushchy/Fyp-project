@@ -107,6 +107,7 @@
         hiddenCanvas = document.createElement('canvas');
         hiddenCanvas.id = 'patientHiddenCanvas';
         hiddenCanvas.style.display = 'none';
+        hiddenCanvas.classList.add('hidden');
         hiddenCanvas.setAttribute('aria-hidden', 'true');
         document.body.appendChild(hiddenCanvas);
       }
@@ -434,7 +435,7 @@
         calibProcessor.onaudioprocess = null;
         calibProcessor.disconnect();
         calibSource.disconnect();
-        try { calibCtx.close(); } catch (_) {}
+        try { calibCtx.close(); } catch (_) { }
 
         // Compute global RMS across all collected samples
         let sumSq = 0;
@@ -503,7 +504,7 @@
     if (speechRecognizer) {
       try {
         speechRecognizer.abort();
-      } catch (e) {}
+      } catch (e) { }
       speechRecognizer = null;
     }
 
@@ -520,7 +521,7 @@
     if (audioContext && audioContext.state !== 'closed') {
       try {
         audioContext.close();
-      } catch (e) {}
+      } catch (e) { }
       audioContext = null;
     }
 

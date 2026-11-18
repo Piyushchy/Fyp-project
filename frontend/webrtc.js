@@ -20,11 +20,10 @@
 
 const WS_SIGNAL_PROTOCOL = location.protocol === 'https:' ? 'wss:' : 'ws:';
 
-/** Default STUN/TURN servers for NAT traversal. */
+/** Default STUN servers for NAT traversal. */
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
 ];
 
 // ============================================================
@@ -193,7 +192,12 @@ function createPeer(initiator) {
     initiator,
     stream: localStream || undefined,
     trickle: true,
-    config: { iceServers: ICE_SERVERS },
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+      ],
+    },
   });
 
   // ── Signaling data (offer / answer / ICE candidates) ──
@@ -206,7 +210,7 @@ function createPeer(initiator) {
     console.log('[peer] received remote stream');
     if ($remoteVideo) {
       $remoteVideo.srcObject = remoteStream;
-      $remoteVideo.play().catch(() => {});
+      $remoteVideo.play().catch(() => { });
     }
     updateStatus('Connected ✓');
   });
@@ -315,8 +319,8 @@ function updateStatus(text) {
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-  $localVideo  = document.getElementById('localVideo');
+  $localVideo = document.getElementById('localVideo');
   $remoteVideo = document.getElementById('remoteVideo');
-  $statusText  = document.getElementById('callStatus');
+  $statusText = document.getElementById('callStatus');
 });
 
