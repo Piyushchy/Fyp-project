@@ -19,7 +19,10 @@
   // CONFIGURATION & CONSTANTS
   // ============================================================
 
-  const DEFAULT_WS_ENDPOINT = 'ws://localhost:8000/ws/multimodal/doctor/room1';
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = typeof window !== 'undefined' && window.location ? window.location.host : 'localhost:8000';
+  const defaultRoomId = 'room1';
+  const DEFAULT_WS_ENDPOINT = `${protocol}//${host}/ws/multimodal/doctor/${defaultRoomId}`;
 
   // 5 Canonical target emotion classes
   const EMOTION_CLASSES = ['Happy', 'Sad', 'Angry', 'Fear', 'Surprise'];
@@ -167,9 +170,16 @@
   // WEBSOCKET TELEMETRY CLIENT
   // ============================================================
 
-  function connectWebSocket(url = DEFAULT_WS_ENDPOINT) {
+  function connectWebSocket(url) {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
       return;
+    }
+
+    if (!url) {
+      const roomId = (typeof document !== 'undefined' && document.getElementById('roomInput') && document.getElementById('roomInput').value.trim()) || 'room1';
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/multimodal/doctor/${roomId}`;
+      url = wsUrl;
     }
 
     activeWsUrl = url;
@@ -751,10 +761,16 @@
   // PUBLIC CONTROLLER API
   // ============================================================
 
-  function startDashboard(wsUrl = DEFAULT_WS_ENDPOINT) {
+  function startDashboard(wsUrl) {
     bindDomElements();
     isRunning = true;
     initChart();
+    if (!wsUrl) {
+      const roomId = (typeof document !== 'undefined' && document.getElementById('roomInput') && document.getElementById('roomInput').value.trim()) || 'room1';
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrlComputed = `${protocol}//${window.location.host}/ws/multimodal/doctor/${roomId}`;
+      wsUrl = wsUrlComputed;
+    }
     connectWebSocket(wsUrl);
     console.log('[DoctorDashboard] Started dashboard with target:', wsUrl);
   }
@@ -809,8 +825,11 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     bindDomElements();
-    // Auto-start doctor telemetry on room1 by default
-    startDashboard(DEFAULT_WS_ENDPOINT);
+    const roomId = (document.getElementById('roomInput') && document.getElementById('roomInput').value.trim()) || 'room1';
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/multimodal/doctor/${roomId}`;
+    // Auto-start doctor telemetry on dynamic endpoint
+    startDashboard(wsUrl);
   });
 
 })(typeof window !== 'undefined' ? window : this);

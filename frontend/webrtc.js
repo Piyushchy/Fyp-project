@@ -107,8 +107,9 @@ function releaseLocalMedia() {
  */
 function connectSignaling(roomId) {
   currentRoomId = roomId;
-  const url = `${WS_SIGNAL_PROTOCOL}//${location.host}/ws/signal/${roomId}`;
-  signalingSocket = new WebSocket(url);
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/ws/signal/${roomId}`;
+  signalingSocket = new WebSocket(wsUrl);
 
   signalingSocket.onopen = () => {
     console.log('[signal] connected to room', roomId);

@@ -21,7 +21,10 @@
   // CONFIGURATION & CONSTANTS
   // ============================================================
 
-  const WS_ENDPOINT = 'ws://localhost:8000/ws/multimodal/patient/room1';
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = typeof window !== 'undefined' && window.location ? window.location.host : 'localhost:8000';
+  const defaultRoomId = 'room1';
+  const WS_ENDPOINT = `${protocol}//${host}/ws/multimodal/patient/${defaultRoomId}`;
   const SAMPLE_INTERVAL_MS = 1500; // 1.5 seconds
   const JPEG_QUALITY = 0.7;
 
@@ -58,9 +61,16 @@
   // 1. WEBSOCKET CONNECTION
   // ============================================================
 
-  function connectWebSocket(url = WS_ENDPOINT) {
+  function connectWebSocket(url) {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
       return;
+    }
+
+    if (!url) {
+      const roomId = (typeof document !== 'undefined' && document.getElementById('roomInput') && document.getElementById('roomInput').value.trim()) || 'room1';
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/multimodal/patient/${roomId}`;
+      url = wsUrl;
     }
 
     console.log('[PatientML] Connecting to WebSocket:', url);
@@ -469,7 +479,13 @@
     isExtractionActive = true;
     isAwaitingResponse = false;
 
-    const targetUrl = options.wsUrl || WS_ENDPOINT;
+    let targetUrl = options.wsUrl;
+    if (!targetUrl) {
+      const roomId = options.roomId || (typeof document !== 'undefined' && document.getElementById('roomInput') && document.getElementById('roomInput').value.trim()) || 'room1';
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/multimodal/patient/${roomId}`;
+      targetUrl = wsUrl;
+    }
     connectWebSocket(targetUrl);
 
     // Initialize speech recognition
@@ -561,7 +577,10 @@
     if (video) {
       video.addEventListener('playing', () => {
         if (video.srcObject && !isExtractionActive) {
-          startPatientExtraction({ stream: video.srcObject });
+          const roomId = (document.getElementById('roomInput') && document.getElementById('roomInput').value.trim()) || 'room1';
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const wsUrl = `${protocol}//${window.location.host}/ws/multimodal/patient/${roomId}`;
+          startPatientExtraction({ stream: video.srcObject, wsUrl });
         }
       });
     }
